@@ -1,0 +1,74 @@
+card_name,card_set,card_type,card_cost,card_passive,card_on_play,card_age,card_prior
+Lumber Yard,Base,Brown,0,1W,0,1,0
+Logging Camp,Base,Brown,1,1W,0,1,0
+Clay Pool,Base,Brown,0,1C,0,1,0
+Clay Pit,Base,Brown,1,1C,0,1,0
+Quarry,Base,Brown,0,1S,0,1,0
+Stone Pit,Base,Brown,1,1S,0,1,0
+Glassworks,Base,Grey,1,1G,0,1,0
+Press,Base,Grey,1,1P,0,1,0
+Guard Tower,Base,Red,0,1M,0,1,0
+Workshop,Base,Green,P,1VS1,0,1,0
+Apothecary,Base,Green,G,1VS2,0,1,0
+Stone Reserve,Base,Gold,3,1S,0,1,0
+Clay Reserve,Base,Gold,3,1C,0,1,0
+Wood Reserve,Base,Gold,3,1W,0,1,0
+Stable,Base,Red,W,1M,0,1,0
+Garrison,Base,Red,C,1M,0,1,0
+Palisade,Base,Red,2,1M,0,1,0
+Scriptorium,Base,Green,2,S3,0,1,0
+Pharmacist,Base,Green,2,S4,0,1,0
+Theatre,Base,Blue,0,3V,0,1,0
+Altar,Base,Blue,0,3V,0,1,0
+Baths,Base,Blue,S,3V,0,1,0
+Tavern,Base,Gold,0,0,4$,1,0
+Sawmill,Base,Brown,$$,2W,0,2,0
+Brickyard,Base,Brown,$$,2C,0,2,0
+Shelf Quarry,Base,Brown,$$,2S,0,2,0
+Glass Blower,Base,Grey,0,1G,0,2,0
+Drying Room,Base,Grey,0,1P,0,2,0
+Walls,Base,Red,SS,2M,0,2,0
+Forum,Base,Gold,$$$C,1G or 1P,0,2,0
+Caravansery,Base,Gold,$$GP,1W or 1C or 1S,0,2,0
+Customs House,Base,Gold,$$$$,1P1G,0,2,0
+Courthouse,Base,Blue,WWG,5V,0,2,0
+Horse Breeders,Base,Red,CW,1M,0,2,Stable
+Barracks,Base,Red,$$$$,1M,0,2,Garrison
+Archery Range,Base,Red,SWP,2M,0,2,0
+Parade Ground,Base,Red,CCG,2M,0,2,0
+Library,Base,Green,SWG,3VS3,0,2,Scriptorium
+Dispensary,Base,Green,CCS,3VS4,0,2,Pharmacist
+School,Base,Green,WPP,1VS2,0,2,0
+Laboratory,Base,Green,WGG,1VS1,0,2,0
+Statue,Base,Blue,CC,4V,0,2,Theatre
+Temple,Base,Blue,WP,4V,0,2,Altar
+Aqueduct,Base,Blue,SSS,5V,0,2,Baths
+Rostrum,Base,Blue,SW,4V,0,2,0
+Brewery,Base,Gold,0,0,6$,2,0
+Arsenal,Base,Red,CCCWW,3M,0,3,0
+Pretorium,Base,Red,$$$$$$$$,3M,0,3,0
+Academy,Base,Green,SWGG,3VS5,0,3,0
+Study,Base,Green,WWGP,3VS5,0,3,0
+Chamber of Commerce,Base,Gold,PP,3V,3$ per Grey,3,0
+Port,Base,Gold,WGP,3V,2$ per Brown,3,0
+Armory,Base,Gold,SSG,3V,1$ per Red,3,0
+Palace,Base,Blue,CSWGG,7V,0,3,0
+Town Hall,Base,Blue,SSSWW,7V,0,3,0
+Obelisk,Base,Blue,SSG,5V,0,3,0
+Merchants Guild,Base,Purple,CWGP,1V per Gold,1$ per Gold,Guild,0
+Shipowners Guild,Base,Purple,CSGP,1V per Grey or 1V per Brown,1$ per Grey or $ per Brown,Guild,0
+Builders Guild,Base,Purple,SSCWG,2V,0,Guild,0
+Magistrates Guild,Base,Purple,WWCP,1V per Blue,1$ per Blue,Guild,0
+Scientists Guild,Base,Purple,CCWW,1V per Green,1$ per Green,Guild,0
+Moneylenders Guild,Base,Purple,SSWW,1V per $$$,0,Guild,0
+Tacticians Guild,Base,Purple,SSCP,1V per Red,1$ per Red,Guild,0
+Fortifications,Base,Red,SSCP,2M,0,3,Palisade
+Siege Workshop,Base,Red,WWWG,2M,0,3,Archery Range
+Circus,Base,Red,CCSS,2M,0,3,Parade Ground
+University,Base,Green,CGP,2VS6,0,3,School
+Observatory,Base,Green,SPP,2VS6,0,3,Laboratory
+Gardens,Base,Blue,CCWW,6V,0,3,Statue
+Pantheon,Base,Blue,CWPP,6V,0,3,Temple
+Senate,Base,Blue,CCSP,5V,0,3,Rostrum
+Lighthouse,Base,Gold,CCG,3V,1$ per Gold,3,Tavern
+Arena,Base,Gold,CSW,3V,2$ per Wonder,3,Brewery
