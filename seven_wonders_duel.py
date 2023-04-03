@@ -1,38 +1,55 @@
 '''Module to play a game of Seven Wonders Duel'''
 import csv
+from dataclasses import dataclass
+from typing import TypedDict
 from ast import literal_eval as leval
 from numpy.random import default_rng
 from sty import fg, bg, rs
 
-
+@dataclass
 class Card:
     '''Define a single card. Attributes match the .csv headers'''
     colour_key = {
-        "Brown": bg(100, 50, 0) + fg.white,
-        "Grey": bg.grey + fg.black,
-        "Red": bg.red + fg.white,
-        "Green": bg(0, 128, 0) + fg.white,
-        "Yellow": bg.yellow + fg.black,
-        "Blue": bg.blue + fg.white,
-        "Purple": bg(128, 0, 128) + fg.white,
+        'Brown': bg(100, 50, 0) + fg.white,
+        'Grey': bg.grey + fg.black,
+        'Red': bg.red + fg.white,
+        'Green': bg(0, 128, 0) + fg.white,
+        'Yellow': bg.yellow + fg.black,
+        'Blue': bg.blue + fg.white,
+        'Purple': bg(128, 0, 128) + fg.white,
     }
 
-    def __init__(self, card_name='', card_set='', card_type='', card_cost='', card_age='',
-        card_effect_passive='', card_effect_when_played='', card_prerequisite=''):
-        self.card_name = card_name
-        self.card_set = card_set
-        self.card_type = card_type
-        self.card_cost = card_cost
-        self.card_effect_passive = card_effect_passive
-        self.card_effect_when_played = card_effect_when_played
-        self.card_age = card_age
-        self.card_prerequisite = card_prerequisite
+    card_name:              str = ''
+    card_set:               str = ''
+    card_type:              str = ''
+    card_cost:              str = ''
+    card_effect_passive:    str = ''
+    card_effect_on_play:    str = ''
+    card_age:               str = ''
+    card_prerequisite:      str = ''
 
     def __repr__(self):
         return str(Card.colour_key[self.card_type]
                    + self.card_name
                    + rs.all)
 
+@dataclass
+class Wonder:
+    '''Define a single wonder. Attributes match the .csv headers'''
+    colour_key = {
+        'Wonder': bg.black + fg.white
+    }
+
+    wonder_name:              str = ''
+    wonder_set:               str = ''
+    wonder_cost:              str = ''
+    wonder_effect_passive:    str = ''
+    wonder_effect_on_play:    str = ''
+
+    def __repr__(self):
+        return str(Wonder.colour_key['Wonder']
+                   + self.wonder_name
+                   + rs.all)
 
 def csv_to_class(csv_file:str, to_class, string=False):
     """Converts a .csv to a list of class objects of type to_class.  Class must take only kwargs as variables.
@@ -62,9 +79,7 @@ def csv_to_class(csv_file:str, to_class, string=False):
                 except ValueError:
                     pass
 
-    list_of_class_objects = [to_class(**kwargs) for kwargs in kwarg_dict_list]
-
-    return list_of_class_objects
+    return [to_class(**kwargs) for kwargs in kwarg_dict_list]
 
 
 class Game:
@@ -73,131 +88,225 @@ class Game:
     all_cards = csv_to_class('card_list.csv',Card)
 
     def __init__(self, game_id=1, active=0):
-        # Create a list of lists, one list per age containing the card objects for that age:
+        # Create a dict with first age cards and card slots:
         self.age_boards = {'1':Age(1)}
         self.game_id = game_id
         self.active = active
         self.players = [Player(0, 'human'), Player(1, 'human')]
-        self.state_variables = StateVariables()
+        self.common_variables = CommonVariables()
+        self.state = self.get_game_state()
+        self.turn_count = 1
         self.display_game_state()
 
     def __repr__(self):
         return repr('Game Instance: ' + str(self.game_id))
 
-        # TODO: Draft wonders function
+    def get_game_state(self):
+        '''Returns a TypedDict of commonly used game state variables'''
+        # Turn player variables
+        player_index = self.common_variables.turn_player
+        player_state = self.players[player_index]
+        player_cards = player_state.cards_in_play
 
-    def request_player_input(self):  # TODO When using AI, no need for player input.
+        # Opponent player variables
+        opponent_index = player_index ^ 1  # XOR operator (changes 1 to 0 and 0 to 1)
+        opponent_state = self.players[opponent_index]
+        opponent_cards = opponent_state.cards_in_play
+
+        # Current age variables
+        current_age = self.common_variables.current_age
+        slots_in_age = self.age_boards[str(current_age)].card_slots
+
+        Gamestate = TypedDict('GameState', {
+            'player_index':      int,
+            'player_state':      Player,
+            'player_cards':      list[Card],
+
+            'opponent_index':    int,
+            'opponent_state':    Player,
+            'opponent_cards':    list[Card],
+
+            'current_age':       int,
+            'slots_in_age':      list[CardSlot]
+        })
+
+        gamestate: Gamestate = {
+            'player_index':      player_index,
+            'player_state':      player_state,
+            'player_cards':      player_cards,
+
+            'opponent_index':    opponent_index,
+            'opponent_state':    opponent_state,
+            'opponent_cards':    opponent_cards,
+
+            'current_age':       current_age,
+            'slots_in_age':      slots_in_age
+        }
+        return gamestate
+
+    # TODO: Draft wonders function
+    def request_player_input(self, display=True):
+        # TODO When using AI, no need for player input.
         """Function to begin requesting player input
 
         Returns:
             void: [description]
         """
+
         if self.active == 0:
             return
 
-        choice = input("PLAYER " + str(self.state_variables.turn_player + 1) + ": "
+        if display is True:
+            self.display_game_state()
+
+        choice = input("PLAYER " + str(self.common_variables.turn_player + 1) + ": "
                        + "Select a card to [c]onstruct or [d]iscard for coins. "
                        + "(Format is 'X#' where X is c/d and # is card position)")  # TODO Select by name or number?
         action, position = choice[0], choice[1:]
 
         if action == 'q':
-            return print("Game has been quit")
+            print("Game has been quit")
+            return
 
         if action not in ['c','d']:
             print("Select a valid action! ([c]onstruct or [d]iscard)")
-            return self.request_player_input()
+            return self.request_player_input(display=False)
 
         if not position.isdigit():
             print("Card choice must be an integer!")
-            return self.request_player_input()
+            return self.request_player_input(display=False)
 
         self.select_card(int(position), action)
+        return self.request_player_input(display=False)
 
-    # Main gameplay loop - players alternate choosing cards from the board and performing actions with them.
-    def select_card(self, position, action='c'):
+    # Main gameplay loop - get_valid_moves() -> select_card() -> turn_end()
+    def select_card(self, position, action='c', valid_move_list=None):
         '''Function to select card on baord and perform the appropriate action'''
-        # Turn player variables
-        player = self.state_variables.turn_player
-        player_state = self.players[player]
-        player_board = player_state.cards_in_play
-
-        # Opponent player variables
-        opponent = player ^ 1  # XOR operator (changes 1 to 0 and 0 to 1)
-        opponent_state = self.players[opponent]
-        opponent_board = opponent_state.cards_in_play
-
-        # Current age variables
-        age = self.state_variables.current_age
-        slots_in_age = self.age_boards[str(age)].card_positions
-
         # Checks for valid card choices
-        if position >= len(slots_in_age) or position < 0:
+        #TODO if move choice is in valid_move_list, skip all the checks
+
+        if position >= len(self.state['slots_in_age']) or position < 0:
             print('Select a card on the board!')
-            return self.request_player_input()
+            return
 
-        chosen_position = slots_in_age[position]
+        chosen_slot = self.state['slots_in_age'][position]
+        chosen_card = chosen_slot.card_in_slot
 
-        if chosen_position.card_in_slot is None:
+        if chosen_card is None:
             print('This card has already been chosen!')
-            return self.request_player_input()
+            return
 
-        if chosen_position.card_selectable == 0:
+        if chosen_slot.card_selectable == 0:
             print('Card is covered, you cannot pick this card!')
-            return self.request_player_input()
+            return
 
         # Discard or construct chosen card and remove card from board
-        match action:
+        match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
-                if card_constructable(player_state, opponent_state, chosen_position.card_in_slot) is True:
-                    player_state.construct_card(chosen_position.card_in_slot)
+                if card_constructable(self.state['player_state'], self.state['opponent_state'], chosen_card) is True:
+                    self.construct_card(chosen_card)
                 else:
                     print('You do not have the resources required to construct this card!')
-                    return self.request_player_input()
+                    return
             case 'd':  # Gain coins based on yellow building owned.
-                yellow_card_count = len([card for card in player_board if card.card_type == 'Yellow'])
-                player_state.coins += 2 + yellow_card_count
+                yellow_card_count = len([card for card in self.state['player_cards'] if card.card_type == 'Yellow'])
+                self.state['player_state'].coins += 2 + yellow_card_count
             case _:
                 print('This is not a valid action!')
-                return self.request_player_input()
+                return
 
-        chosen_position.card_in_slot = None
-        player_state.update()
+        # Remove card from board
+        # TODO move to DiscardPile object
+        chosen_slot.card_in_slot = None
+        self.turn_end()
+        return 
 
-        # Check for end of age
-        self.check_age_end()
+    def construct_card(self, card:Card):
+        '''Fucntion to construct a card in turn players tableau'''
 
-        # Continue game loop.
-        self.display_game_state()
-        return self.request_player_input()
+        self.state['player_cards'].append(card)
+        # TODO run on construct effects
+        return
 
-    def check_age_end(self):
-        '''Checks if there are cards left in the age, and if not, progresses to the next age'''
+    def turn_end(self):
+        '''Run end of turn functions'''
+        # Update player passive variables (resources/VP/science symbols)
+        self.update_player_states()
 
-        # Current age variables
-        age = self.state_variables.current_age
-        slots_in_age = self.age_boards[str(age)].card_positions
+        # Check for science/military win and end game if required
+        self.check_alt_victory()
 
-        if all(slots_in_age[slot].card_in_slot is None for slot in range(len(slots_in_age))):
-            self.state_variables.progress_age()
+        # Update age card slots
+        self.age_boards[str(self.state['current_age'])].update_all_slots()
 
-        else:  # Otherwise, update all cards in current age and change turn turn_player
-            self.age_boards[str(age)].update_all_slots()
-            self.state_variables.change_turn_player()  # TODO This might not always be true if go again wonders chosen
+        # Check for end of age and progress if required
+        if all(self.state['slots_in_age'][s].card_in_slot is None for s in range(len(self.state['slots_in_age']))):
+            self.common_variables.progress_age()
 
-        if self.state_variables.game_end:
-            self.display_game_state()
-            return print('Game is over!')  # TODO Check victory and stuff
+            # Check for game end
+            if self.common_variables.game_ended is True:
+                print('Game is over!')
+                return self.game_end('civilian')
 
-    # Displays the game state in a nice enough way.
+            # Create next age board and update handy state variables
+            self.age_boards[str(self.common_variables.current_age)] = Age(self.common_variables.current_age)
+        else:
+            self.common_variables.change_turn_player()
+
+        # Update handy self.state variable and turn count
+        self.state = self.get_game_state()
+        self.turn_count += 1
+
+        # Display game state
+        return self.display_game_state()
+
+    #TODO Give meaning to turn end functions
+    def update_player_states(self):
+        '''Updates all player passive variables (resources/VP/science symbols etc.)'''
+        return
+
+    def check_alt_victory(self):
+        '''Checks for alternate victory conditions (military and science) and ends game if required'''
+        return
+
+    def update_age(self):
+        '''Updates player passive variables based on boths players tableau'''
+        return
+        # state = self.get_game_state()
+
+        # for key in self.players[player].passive_variables.keys(): #reset all vars to 0
+        #     self.players[player].passive_variables[key] = 0
+
+        # if self.cards_in_play:
+        #     for card in self.cards_in_play:
+        #         pass
+
+
+        # return
+        # Displays the game state in a nice enough way.
+
+    def game_end(self, victory_method='civilian'):
+        '''Does game end stuff - check for winner etc.'''
+        victory_methods = ['civilian','military','science']
+        if victory_method not in victory_methods:
+            raise ValueError("Invalid victory method, expected one of: %s" % victory_methods)
+
+        match victory_method:
+            case 'military':
+                print("Player "+str(self.common_variables.turn_player)+" won by military supremacy!")
+            case 'science':
+                print("Player "+str(self.common_variables.turn_player)+" won by scientific supremacy!")
+            case 'civilian':
+                #TODO call player_with_more_points()
+                print("Player with more points won by civilian victory!")
+
     def display_game_state(self):
         '''Print a visual representation of the current game state'''
-        player = self.state_variables.turn_player
-        age = self.state_variables.current_age
 
-        self.age_boards[str(age)].display_board()
+        self.age_boards[str(self.state['current_age'])].display_board()
         print("Player 1 >", self.players[0])
         print("Player 2 >", self.players[1])
-        print("Current turn player is Player ", str(player + 1))
+        print("Current turn player is Player ", str(self.state['player_index'] + 1))
 
 
 class CardSlot:
@@ -243,32 +352,31 @@ class Player:
         self.cards_in_play = []
         self.wonders_in_hand = []
         self.wonders_in_play = []
+        self.progress_tokens = []
 
         # Passive variables can be updated anytime based on cards_in_play via self.update() method.
-        self.victory_points = 0
-        self.clay = 0
-        self.wood = 0
-        self.stone = 0
-        self.paper = 0
-        self.glass = 0
-        self.victory_tokens = []
+        self.passive_variables = {
+            'C':0, #Clay
+            'W':0, #Wood
+            'S':0, #Stone
+            'P':0, #Paper
+            'G':0, #Glass
+            'V':0, #Victory Points
+            '1':0, #Victory Symbol (Frame)
+            '2':0, #Victory Symbol (Wheel)
+            '3':0, #Victory Symbol (Quill & Ink)
+            '4':0, #Victory Symbol (Mortal & Pestle)
+            '5':0, #Victory Symbol (Sundial)
+            '6':0, #Victory Symbol (Astrolabe)
+            '7':0 #Victory Symbol (Scales)
+        }
 
     def __repr__(self):
         return str(" Coins: " + repr(self.coins)
                    + ", Board: " + repr(self.cards_in_play))
 
-    # TODO Function to construct card (pay resources, add card to player board, gain on buy benefit)
-    # removal of card from game board is done elsewhere! (in Game.select_card method).
-    def construct_card(self, card):
-        '''Fucntion to construct a card in a players tableau'''
-        self.cards_in_play.append(card)
 
-    def update(self):
-        '''Updates player passive variables based on players tableau'''
-        return
-
-
-class StateVariables:
+class CommonVariables:
     '''Class to represent all state variables shared between players (military, turn player, etc.)'''
 
     def __init__(self, turn_player=None, current_age=1, military_track=0):
@@ -278,7 +386,7 @@ class StateVariables:
             # Randomly select first player if none specified.
         self.current_age = current_age  # Start in first age.
         self.military_track = military_track  # Start military track at 0.
-        self.game_end = False
+        self.game_ended = False
 
     def change_turn_player(self):
         '''Function to change current turn player'''
@@ -286,11 +394,11 @@ class StateVariables:
 
     def progress_age(self):
         '''Function to progress age and end game if required'''
-        # TODO For progress age function: check military track for turn player and deal with end of game.
+        # TODO For progress age function: check military track to set first turn player.
         if self.current_age < 3:
             self.current_age = self.current_age + 1
         else:
-            self.game_end = True
+            self.game_ended = True
 
 
 class Age:
@@ -320,7 +428,7 @@ class Age:
     def __init__(self, age):
         self.rng = default_rng()
         self.age = age
-        self.card_positions = self.prepare_age_board(age)
+        self.card_slots = self.prepare_age_board(age)
 
     def __repr__(self):
         return str('Age ' + str(self.age))
@@ -352,45 +460,53 @@ class Age:
 
     def update_all_slots(self):
         '''Updates all slots on board as per update_slot method'''
-        for slot in range(len(self.card_positions)):
+        for slot in range(len(self.card_slots)):
             self.update_slot(slot)  # Update each slot for visibility and selectability.
 
     def update_slot(self, slot):
         '''Updates card in a single slot for visibility, selectability, etc.'''
-        if self.card_positions[slot].covered_by:  # Checks whether there are still cards covering this card.
+        if self.card_slots[slot].covered_by:  # Checks whether there are still cards covering this card.
             # Apparently the pythonic way to check a list is not empty is to see if the list is true... ¯\_(ツ)_/¯
-            for covering_card in self.card_positions[slot].covered_by:  # Loops through list of
+            for covering_card in self.card_slots[slot].covered_by:  # Loops through list of
                 # covering cards. Does it backwards to avoid index errors.
-                if self.card_positions[covering_card].card_in_slot is None:  # Checks if covering card has been taken.
-                    self.card_positions[slot].covered_by.remove(covering_card)  # If covering card has been taken,
+                if self.card_slots[covering_card].card_in_slot is None:  # Checks if covering card has been taken.
+                    self.card_slots[slot].covered_by.remove(covering_card)  # If covering card has been taken,
                     # remove it from list of covering cards.
 
-        if not self.card_positions[slot].covered_by:  # If no more covering cards, make card visible and selectable.
-            self.card_positions[slot].card_selectable = 1
-            self.card_positions[slot].card_visible = 1
+        if not self.card_slots[slot].covered_by:  # If no more covering cards, make card visible and selectable.
+            self.card_slots[slot].card_selectable = 1
+            self.card_slots[slot].card_visible = 1
 
     def display_board(self):
         '''Prints visual representation of cards remaining on the board for this age'''
-        cards = self.card_positions
-        rows = max(self.card_positions[slot].row for slot in range(len(self.card_positions)))
+        cards = self.card_slots
+        rows = max(self.card_slots[slot].row for slot in range(len(self.card_slots)))
         for row in reversed(range(int(rows) + 1)):
             print("Row", str(row + 1), ":", [card for card in cards if int(card.row) == row])
 
-
-# Takes 2 Player objects and 1 Card object and checks whether card is constructable given state and cost.
-# TODO Check whether card is constructable given arbitrary player/opponent/card objects
-def card_constructable(player, opponent, card):
-    '''Checks whether a card is constructable given current player states'''
-    return True
-
 # Takes 2 Player objects and 1 Age object and retruns all valid moves for the player.
-# TODO Return list of valid moves for current player.
-def valid_moves(player, opponent, age):
+# TODO Return list of valid moves for current player using below functions.
+def get_valid_moves(game:Game):
     '''Returns list of valid moves for given board state and player states'''
     return
+
+def card_constructable(player:Player, opponent:Player, card:Card):
+    '''Checks whether a card is constructable given current player states'''
+
+    return True
+
+def wonder_constructable(player:Player, opponent:Player, card:Wonder):
+    '''Checks whether a card is constructable given current player states'''
+
+    return True
+
+# Takes 2 Player objects and 1 Card object and checks whether card is constructable given state and cost.
+def card_coin_cost(player:Player, opponent:Player, card:Card):
+    '''Calculates card cost given current player states'''
+    cost = 3
+    return cost
 
 
 if __name__ == "__main__":
     game1 = Game(1,1)
-    game1.request_player_input()
-    pass
+    game1.request_player_input(display=True)
