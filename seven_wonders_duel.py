@@ -208,7 +208,7 @@ class Game:
                 else:
                     print('You do not have the resources required to construct this card!')
                     return
-            case 'd':  # Gain coins based on yellow building owned.
+            case 'd':  # Gain coins based on yellow buildings owned.
                 yellow_card_count = len([card for card in self.state['player_cards'] if card.card_type == 'Yellow'])
                 self.state['player_state'].coins += 2 + yellow_card_count
             case _:
@@ -219,7 +219,7 @@ class Game:
         # TODO move to DiscardPile object
         chosen_slot.card_in_slot = None
         self.turn_end()
-        return 
+        return
 
     def construct_card(self, card:Card):
         '''Fucntion to construct a card in turn players tableau'''
