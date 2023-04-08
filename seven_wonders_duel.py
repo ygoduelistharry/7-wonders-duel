@@ -1,10 +1,11 @@
-'''Module to play a game of Seven Wonders Duel'''
+"""Module to play a game of Seven Wonders Duel"""
 import csv
 from dataclasses import dataclass
 from typing import TypedDict
 from ast import literal_eval as leval
 from numpy.random import default_rng
 from sty import fg, bg, rs
+
 
 @dataclass
 class Card:
@@ -22,16 +23,30 @@ class Card:
     card_name:              str = ''
     card_set:               str = ''
     card_type:              str = ''
-    card_cost:              str = ''
+    card_cost_string:       str = ''
     card_effect_passive:    str = ''
     card_effect_on_play:    str = ''
     card_age:               str = ''
     card_prerequisite:      str = ''
 
+    def __post_init__(self):
+        self.card_costs = {
+            'C':0, #Clay
+            'W':0, #Wood
+            'S':0, #Stone
+            'P':0, #Paper
+            'G':0, #Glass
+            '$':0  #Coins
+        }
+        if self.card_cost_string:
+            for symbol in self.card_cost_string:
+                self.card_costs[symbol] += 1
+
     def __repr__(self):
         return str(Card.colour_key[self.card_type]
                    + self.card_name
                    + rs.all)
+
 
 @dataclass
 class Wonder:
@@ -42,14 +57,65 @@ class Wonder:
 
     wonder_name:              str = ''
     wonder_set:               str = ''
-    wonder_cost:              str = ''
+    wonder_cost_string:       str = ''
     wonder_effect_passive:    str = ''
     wonder_effect_on_play:    str = ''
+
+    def __post_init__(self):
+        self.card_costs = {
+            'C':0, #Clay
+            'W':0, #Wood
+            'S':0, #Stone
+            'P':0, #Paper
+            'G':0, #Glass
+            '$':0  #Coins
+        }
+        if self.wonder_cost_string:
+            for symbol in self.wonder_cost_string:
+                self.card_costs[symbol] += 1
 
     def __repr__(self):
         return str(Wonder.colour_key['Wonder']
                    + self.wonder_name
                    + rs.all)
+
+
+class Player:
+    '''Define a class for play to track tableau cards, money, etc.'''
+
+    def __init__(self, player_number=0, player_type='human'):
+        # Private:
+        self.player_number = player_number
+        self.player_type = player_type
+
+        # Update as card is chosen through Game.construct_card method:
+        self.coins = 7
+        self.cards_in_play = []
+        self.wonders_in_hand = []
+        self.wonders_in_play = []
+        self.progress_tokens = []
+
+        # Passive variables can be updated anytime based on cards_in_play via self.update() method.
+        self.passive_variables = {
+            'C':0, #Clay
+            'W':0, #Wood
+            'S':0, #Stone
+            'P':0, #Paper
+            'G':0, #Glass
+            'V':0, #Victory Points
+            '1':0, #Victory Symbol (Frame)
+            '2':0, #Victory Symbol (Wheel)
+            '3':0, #Victory Symbol (Quill & Ink)
+            '4':0, #Victory Symbol (Mortal & Pestle)
+            '5':0, #Victory Symbol (Sundial)
+            '6':0, #Victory Symbol (Astrolabe)
+            '7':0 #Victory Symbol (Scales)
+        }
+
+    def __repr__(self):
+        return str(" Coins: " + repr(self.coins)
+                   + ", Board: " + repr(self.cards_in_play))
+
 
 def csv_to_class(csv_file:str, to_class, string=False):
     """Converts a .csv to a list of class objects of type to_class.  Class must take only kwargs as variables.
@@ -117,7 +183,7 @@ class Game:
         current_age = self.common_variables.current_age
         slots_in_age = self.age_boards[str(current_age)].card_slots
 
-        Gamestate = TypedDict('GameState', {
+        gamestate_class = TypedDict('GameState', {
             'player_index':      int,
             'player_state':      Player,
             'player_cards':      list[Card],
@@ -130,7 +196,7 @@ class Game:
             'slots_in_age':      list[CardSlot]
         })
 
-        gamestate: Gamestate = {
+        gamestate: gamestate_class = {
             'player_index':      player_index,
             'player_state':      player_state,
             'player_cards':      player_cards,
@@ -204,7 +270,7 @@ class Game:
         match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
                 if card_constructable(self.state['player_state'], self.state['opponent_state'], chosen_card) is True:
-                    self.construct_card(chosen_card)
+                    self.construct_card(self.state['player_state'], chosen_card)
                 else:
                     print('You do not have the resources required to construct this card!')
                     return
@@ -221,10 +287,11 @@ class Game:
         self.turn_end()
         return
 
-    def construct_card(self, card:Card):
+    def construct_card(self, player:Player, card:Card):
         '''Fucntion to construct a card in turn players tableau'''
 
-        self.state['player_cards'].append(card)
+        player.cards_in_play.append(card)
+
         # TODO run on construct effects
         return
 
@@ -290,6 +357,7 @@ class Game:
         victory_methods = ['civilian','military','science']
         if victory_method not in victory_methods:
             raise ValueError("Invalid victory method, expected one of: %s" % victory_methods)
+        self.display_game_state()
 
         match victory_method:
             case 'military':
@@ -311,7 +379,8 @@ class Game:
 
 class CardSlot:
     '''Define a card slot on board to represent selectability, visibility, etc.'''
-
+    # TODO covered_by doesnt work when covered by 0 only (age 2 pos 2, age 3 pos 2).
+    # TODO Changed .csv to "0" instead of 0, but would like to fix here.
     def __init__(self, card_in_slot=None, card_board_position=None, game_age=None,
                  card_visible=1, card_selectable=0, covered_by=None, row=None):
         self.card_board_position = card_board_position
@@ -337,43 +406,6 @@ class CardSlot:
         return str("#" + repr(self.card_board_position) + " "
                    + repr(self.card_in_slot)
                    )
-
-
-class Player:
-    '''Define a class for play to track tableau cards, money, etc.'''
-
-    def __init__(self, player_number=0, player_type='human'):
-        # Private:
-        self.player_number = player_number
-        self.player_type = player_type
-
-        # Update as card is chosen through Game.construct_card method:
-        self.coins = 7
-        self.cards_in_play = []
-        self.wonders_in_hand = []
-        self.wonders_in_play = []
-        self.progress_tokens = []
-
-        # Passive variables can be updated anytime based on cards_in_play via self.update() method.
-        self.passive_variables = {
-            'C':0, #Clay
-            'W':0, #Wood
-            'S':0, #Stone
-            'P':0, #Paper
-            'G':0, #Glass
-            'V':0, #Victory Points
-            '1':0, #Victory Symbol (Frame)
-            '2':0, #Victory Symbol (Wheel)
-            '3':0, #Victory Symbol (Quill & Ink)
-            '4':0, #Victory Symbol (Mortal & Pestle)
-            '5':0, #Victory Symbol (Sundial)
-            '6':0, #Victory Symbol (Astrolabe)
-            '7':0 #Victory Symbol (Scales)
-        }
-
-    def __repr__(self):
-        return str(" Coins: " + repr(self.coins)
-                   + ", Board: " + repr(self.cards_in_play))
 
 
 class CommonVariables:
@@ -484,25 +516,28 @@ class Age:
         for row in reversed(range(int(rows) + 1)):
             print("Row", str(row + 1), ":", [card for card in cards if int(card.row) == row])
 
-# Takes 2 Player objects and 1 Age object and retruns all valid moves for the player.
-# TODO Return list of valid moves for current player using below functions.
+
 def get_valid_moves(game:Game):
     '''Returns list of valid moves for given board state and player states'''
+    # TODO Return list of valid moves for current player using below functions.
     return
+
 
 def card_constructable(player:Player, opponent:Player, card:Card):
     '''Checks whether a card is constructable given current player states'''
 
     return True
 
+
 def wonder_constructable(player:Player, opponent:Player, card:Wonder):
     '''Checks whether a card is constructable given current player states'''
 
     return True
 
-# Takes 2 Player objects and 1 Card object and checks whether card is constructable given state and cost.
+
 def card_coin_cost(player:Player, opponent:Player, card:Card):
     '''Calculates card cost given current player states'''
+    #TODO implement card coin cost function
     cost = 3
     return cost
 
