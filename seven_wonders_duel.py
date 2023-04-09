@@ -39,8 +39,8 @@ class Card:
             '$':0  #Coins
         }
         if self.card_cost_string:
-            for symbol in self.card_cost_string:
-                self.card_costs[symbol] += 1
+            for resource in self.card_cost_string:
+                self.card_costs[resource] += 1
 
     def __repr__(self):
         return str(Card.colour_key[self.card_type]
@@ -71,8 +71,8 @@ class Wonder:
             '$':0  #Coins
         }
         if self.wonder_cost_string:
-            for symbol in self.wonder_cost_string:
-                self.card_costs[symbol] += 1
+            for resource in self.wonder_cost_string:
+                self.card_costs[resource] += 1
 
     def __repr__(self):
         return str(Wonder.colour_key['Wonder']
@@ -96,12 +96,33 @@ class Player:
         self.progress_tokens = []
 
         # Passive variables can be updated anytime based on cards_in_play via self.update() method.
-        self.passive_variables = {
+        self.grey_brown_resources = {
             'C':0, #Clay
             'W':0, #Wood
             'S':0, #Stone
             'P':0, #Paper
             'G':0, #Glass
+        }
+
+        self.wonder_resources = {
+            'C':0, #Clay
+            'W':0, #Wood
+            'S':0, #Stone
+            'P':0, #Paper
+            'G':0, #Glass
+        }
+
+        self.gold_resources = {
+            'c':0, #Clay
+            'w':0, #Wood
+            's':0, #Stone
+            'p':0, #Paper
+            'g':0, #Glass
+            'G/P':0, #Forum
+            'W/C/S':0 #Caravansery
+        }
+
+        self.victory_state = {
             'V':0, #Victory Points
             '1':0, #Victory Symbol (Frame)
             '2':0, #Victory Symbol (Wheel)
@@ -517,28 +538,55 @@ class Age:
             print("Row", str(row + 1), ":", [card for card in cards if int(card.row) == row])
 
 
-def get_valid_moves(game:Game):
+def get_valid_moves(game:Game) -> list[str]:
     '''Returns list of valid moves for given board state and player states'''
     # TODO Return list of valid moves for current player using below functions.
     return
 
 
-def card_constructable(player:Player, opponent:Player, card:Card):
+def card_constructable(player:Player, opponent:Player, card:Card) -> bool:
     '''Checks whether a card is constructable given current player states'''
 
     return True
 
 
-def wonder_constructable(player:Player, opponent:Player, card:Wonder):
+def wonder_constructable(player:Player, opponent:Player, card:Wonder) -> bool:
     '''Checks whether a card is constructable given current player states'''
 
     return True
 
 
-def card_coin_cost(player:Player, opponent:Player, card:Card):
+def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
     '''Calculates card cost given current player states'''
     #TODO implement card coin cost function
-    cost = 3
+    if len(card.card_cost_string) == 0:
+        return 0
+
+    # Checks if card_prerequisite string is not empty, and if present in players tableu.
+    if card.card_prerequisite and card.card_prerequisite in [c.card_name for c in player.cards_in_play]:
+        return 0
+
+    if all(card.card_cost_string) == '$':
+        return len(card.card_cost_string)
+
+    cost_defecit = {}
+    for resource in ['C','W','S','P','G']:
+        cost_defecit[resource] = max(0,
+            card.costs[resource] -
+            player.grey_brown_resources[resource] -
+            player.wonder_resources
+        )
+    if sum(cost_defecit.values()) == 0:
+        return 0
+
+    # Adds cost based on opponents board. Need to deal with optional resources
+    cost = 0
+    for resource, defecit in cost_defecit.items():
+        if player.gold_resources[resource.lower()] > 0:
+            cost += defecit
+        else:
+            cost += 2 + defecit * opponent.grey_brown_resources[resource]
+
     return cost
 
 
