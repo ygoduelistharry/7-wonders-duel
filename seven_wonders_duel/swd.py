@@ -1,4 +1,4 @@
-"""Module to play a game of Seven Wonders Duel"""
+"""Classes and functions to run Seven Wonders Duel game logic"""
 import csv
 from dataclasses import dataclass
 from typing import TypedDict
@@ -592,4 +592,4 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
 
 if __name__ == "__main__":
     game1 = Game(1,1)
-    game1.request_player_input(display=True)
+    #game1.request_player_input(display=True)

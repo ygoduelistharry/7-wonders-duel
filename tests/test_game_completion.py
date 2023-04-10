@@ -1,5 +1,5 @@
-""" Game completion test functions for Seven Wonders Duel module"""
-import seven_wonders_duel as swd
+"""Game completion test functions for Seven Wonders Duel module"""
+from seven_wonders_duel import swd
 
 test_game = swd.Game(1)
 
