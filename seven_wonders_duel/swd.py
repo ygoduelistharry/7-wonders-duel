@@ -571,23 +571,24 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
     if all(card.card_cost_string) == '$':
         return len(card.card_cost_string)
 
+    cost = card.card_costs['$']
+
     cost_defecit = {}
     for resource in ['C','W','S','P','G']:
         cost_defecit[resource] = max(0,
-            card.costs[resource] -
+            card.card_costs[resource] -
             player.grey_brown_resources[resource] -
-            player.wonder_resources
+            player.wonder_resources[resource]
         )
     if sum(cost_defecit.values()) == 0:
-        return 0
+        return cost
 
     # Adds cost based on opponents board. Need to deal with optional resources
-    cost = 0
     for resource, defecit in cost_defecit.items():
         if player.gold_resources[resource.lower()] > 0:
             cost += defecit
         else:
-            cost += 2 + defecit * opponent.grey_brown_resources[resource]
+            cost += defecit * (2 + opponent.grey_brown_resources[resource])
 
     return cost
 
