@@ -79,7 +79,7 @@ for p, o in player_pairings:
 @mark.parametrize("player,opponent",[(test_players[p],test_players[o]) for p, o in player_pairings],
                   ids=[p+" vs "+o for p, o in player_pairings])
 def test_check_card_coin_costs(player:swd.Player, opponent:swd.Player, card:swd.Card):
-
+    '''Checks the coin cost of certain cards for various player and opponent board states.'''
     coin_cost = swd.card_coin_cost(player,opponent,card)
 
     #Base costs all assume an opponent who has nothing at all in play.

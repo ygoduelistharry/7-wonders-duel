@@ -11,7 +11,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 @dataclass
 class Card:
-    '''Define a single card. Attributes match the .csv headers'''
+    '''Define a single card. Attributes match the .csv headers.'''
     colour_key = {
         'Brown': bg(100, 50, 0) + fg.white,
         'Grey': bg.grey + fg.black,
@@ -52,7 +52,7 @@ class Card:
 
 @dataclass
 class Wonder:
-    '''Define a single wonder. Attributes match the .csv headers'''
+    '''Define a single wonder. Attributes match the .csv headers.'''
     colour_key = {
         'Wonder': bg.black + fg.white
     }
@@ -115,13 +115,11 @@ class Player:
         }
 
         self.gold_resources = {
-            'c':0, #Clay
-            'w':0, #Wood
-            's':0, #Stone
-            'p':0, #Paper
-            'g':0, #Glass
-            'G/P':0, #Forum
-            'W/C/S':0 #Caravansery
+            'C':0,    #Clay
+            'W':0,    #Wood
+            'S':0,    #Stone
+            'P':0,    #Paper
+            'G':0,    #Glass
         }
 
         self.victory_state = {
@@ -132,12 +130,26 @@ class Player:
             '4':0, #Victory Symbol (Mortal & Pestle)
             '5':0, #Victory Symbol (Sundial)
             '6':0, #Victory Symbol (Astrolabe)
-            '7':0 #Victory Symbol (Scales)
+            '7':0  #Victory Symbol (Scales)
         }
 
     def __repr__(self):
         return str(" Coins: " + repr(self.coins)
                    + ", Board: " + repr(self.cards_in_play))
+
+    def has_card(self, card_name):
+        '''Checks if player has a card named card_name.'''
+        if any(card.card_name == card_name for card in self.cards_in_play):
+            return True
+        else:
+            return False
+
+    def has_wonder(self, wonder_name):
+        '''Checks if player has a wonder named wonder_name.'''
+        if any(wonder.wonder_name == wonder_name for wonder in self.wonders_in_play):
+            return True
+        else:
+            return False
 
 
 def csv_to_class(csv_file:str, to_class, string=False):
@@ -172,7 +184,7 @@ def csv_to_class(csv_file:str, to_class, string=False):
 
 
 class Game:
-    '''Define a single instance of a game'''
+    '''Define a single instance of a game.'''
     # TODO need to track discard pile as some wonders revive cards
     all_cards = csv_to_class('card_list.csv',Card)
 
@@ -191,7 +203,7 @@ class Game:
         return repr('Game Instance: ' + str(self.game_id))
 
     def get_game_state(self):
-        '''Returns a TypedDict of commonly used game state variables'''
+        '''Returns a TypedDict of commonly used game state variables.'''
         # Turn player variables
         player_index = self.common_variables.turn_player
         player_state = self.players[player_index]
@@ -236,11 +248,7 @@ class Game:
     # TODO: Draft wonders function
     def request_player_input(self, display=True):
         # TODO When using AI, no need for player input.
-        """Function to begin requesting player input
-
-        Returns:
-            void: [description]
-        """
+        '''Function to begin requesting player input.'''
 
         if self.active == 0:
             return
@@ -311,7 +319,7 @@ class Game:
         return
 
     def construct_card(self, player:Player, card:Card):
-        '''Fucntion to construct a card in turn players tableau'''
+        '''Function to construct a card in turn players tableau'''
 
         player.cards_in_play.append(card)
 
@@ -352,15 +360,15 @@ class Game:
 
     #TODO Give meaning to turn end functions
     def update_player_states(self):
-        '''Updates all player passive variables (resources/VP/science symbols etc.)'''
+        '''Updates all player passive variables (resources/VP/science symbols etc.).'''
         return
 
     def check_alt_victory(self):
-        '''Checks for alternate victory conditions (military and science) and ends game if required'''
+        '''Checks for alternate victory conditions (military and science) and ends game if required.'''
         return
 
     def update_age(self):
-        '''Updates player passive variables based on boths players tableau'''
+        '''Updates player passive variables based on boths players tableau.'''
         return
         # state = self.get_game_state()
 
@@ -392,7 +400,7 @@ class Game:
                 print("Player with more points won by civilian victory!")
 
     def display_game_state(self):
-        '''Print a visual representation of the current game state'''
+        '''Print a visual representation of the current game state.'''
 
         self.age_boards[str(self.state['current_age'])].display_board()
         print("Player 1 >", self.players[0])
@@ -403,7 +411,7 @@ class Game:
 class CardSlot:
     '''Define a card slot on board to represent selectability, visibility, etc.'''
     # TODO covered_by doesnt work when covered by 0 only (age 2 pos 2, age 3 pos 2).
-    # TODO Changed .csv to "0" instead of 0, but would like to fix here.
+    # TODO Changed .csv to "0" instead of 0 to fix above, but would like to fix here.
     def __init__(self, card_in_slot=None, card_board_position=None, game_age=None,
                  card_visible=1, card_selectable=0, covered_by=None, row=None):
         self.card_board_position = card_board_position
@@ -432,7 +440,7 @@ class CardSlot:
 
 
 class CommonVariables:
-    '''Class to represent all state variables shared between players (military, turn player, etc.)'''
+    '''Class to represent all state variables shared between players (military, turn player, etc.).'''
 
     def __init__(self, turn_player=None, current_age=1, military_track=0):
         self.rng = default_rng()
@@ -457,7 +465,7 @@ class CommonVariables:
 
 
 class Age:
-    '''Class to define a game age and represent the unique board layouts'''
+    '''Class to define a game age and represent the unique board layouts.'''
 
     all_card_slots = csv_to_class('age_layout.csv', CardSlot)
 
@@ -541,58 +549,99 @@ class Age:
 
 
 def get_valid_moves(game:Game) -> list[str]:
-    '''Returns list of valid moves for given board state and player states'''
+    '''Returns list of valid moves for given board state and player states.'''
     # TODO Return list of valid moves for current player using below functions.
     return
 
 
 def card_constructable(player:Player, opponent:Player, card:Card) -> bool:
-    '''Checks whether a card is constructable given current player states'''
+    '''Checks whether a card is constructable given current player states.'''
 
     return True
 
 
 def wonder_constructable(player:Player, opponent:Player, card:Wonder) -> bool:
-    '''Checks whether a card is constructable given current player states'''
+    '''Checks whether a card is constructable given current player states.'''
 
     return True
 
 
 def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
-    '''Calculates card cost given current player states'''
-    #TODO implement card coin cost function
+    '''Calculates card cost given current player states.'''
+    #TODO Account for optional gold resources (Forum and Caravansery)
     if len(card.card_cost_string) == 0:
         return 0
 
     # Checks if card_prerequisite string is not empty, and if present in players tableu.
-    if card.card_prerequisite and card.card_prerequisite in [c.card_name for c in player.cards_in_play]:
+    if card.card_prerequisite and player.has_card(card.card_prerequisite):
         return 0
-
-    if all(card.card_cost_string) == '$':
-        return len(card.card_cost_string)
 
     cost = card.card_costs['$']
 
-    cost_defecit = {}
-    for resource in ['C','W','S','P','G']:
-        cost_defecit[resource] = max(0,
-            card.card_costs[resource] -
-            player.grey_brown_resources[resource] -
-            player.wonder_resources[resource]
-        )
-    if sum(cost_defecit.values()) == 0:
+    if set(card.card_cost_string) == {'$'}:
         return cost
 
-    # Adds cost based on opponents board. Need to deal with optional resources
-    for resource, defecit in cost_defecit.items():
-        if player.gold_resources[resource.lower()] > 0:
-            cost += defecit
+    resources = ['C','W','S','P','G']
+
+    resource_defecit = {}
+    for res in resources:
+        resource_defecit[res] = max(0,
+            card.card_costs[res] -
+            player.grey_brown_resources[res] -
+            player.wonder_resources[res]
+        )
+    if sum(resource_defecit.values()) == 0:
+        return cost
+
+    resource_cost = {}
+    for res in resources:
+        if player.gold_resources[res] >= 1:
+            resource_cost[res] = 1
         else:
-            cost += defecit * (2 + opponent.grey_brown_resources[resource])
+            resource_cost[res] = 2 + opponent.grey_brown_resources[res]
+
+    or_pg = 0
+    or_cws = 0
+
+    if player.has_card('Forum'):
+        or_pg += 1
+    if player.has_wonder('Piraeus'):
+        or_pg += 1
+    if player.has_card('Caravansery'):
+        or_cws += 1
+    if player.has_wonder('The Great Lighthouse'):
+        or_cws += 1
+
+    for _ in range(or_pg):
+        if all([resource_defecit['P'],resource_defecit['G']]) == 0:
+            break
+        resource_benefit = {}
+        for res in ['P','G']:
+            if resource_defecit[res] == 0:
+                resource_benefit[res] = 0
+            elif player.gold_resources[res] >= 1:
+                resource_benefit[res] = 1
+            else:
+                resource_benefit[res] = opponent.grey_brown_resources[res]
+        max_benefit = max(resource_benefit, key = resource_benefit.get)
+        resource_defecit[max_benefit] += -1
+
+    for _ in range(or_cws):
+        if all([resource_defecit['C'],resource_defecit['W'],resource_defecit['S']]) == 0:
+            break
+        resource_benefit = {}
+        for res in ['C','W','S']:
+            if resource_defecit[res] == 0:
+                resource_benefit[res] = 0
+            elif player.gold_resources[res] >= 1:
+                resource_benefit[res] = 1
+            else:
+                resource_benefit[res] = opponent.grey_brown_resources[res]
+        max_benefit = max(resource_benefit, key = resource_benefit.get)
+        resource_defecit[max_benefit] += -1
+
+
+    for res, defecit in resource_defecit.items():
+        cost += defecit * resource_cost[res]
 
     return cost
-
-
-if __name__ == "__main__":
-    game1 = Game(1,1)
-    game1.request_player_input(display=True)
