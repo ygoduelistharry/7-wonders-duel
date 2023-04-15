@@ -1,74 +1,74 @@
-card_name,card_set,card_type,card_cost_string,card_effect_passive,card_effect_on_play,card_age,card_prerequisite
-Lumber Yard,Base,Brown,,W,,1,
-Logging Camp,Base,Brown,$,W,,1,
-Clay Pool,Base,Brown,,C,,1,
-Clay Pit,Base,Brown,$,C,,1,
-Quarry,Base,Brown,,S,,1,
-Stone Pit,Base,Brown,$,S,,1,
-Glassworks,Base,Grey,$,G,,1,
-Press,Base,Grey,$,P,,1,
-Guard Tower,Base,Red,,,M,1,
-Workshop,Base,Green,P,V1,,1,
-Apothecary,Base,Green,G,V2,,1,
-Stone Reserve,Base,Yellow,$$$,s,,1,
-Clay Reserve,Base,Yellow,$$$,c,,1,
-Wood Reserve,Base,Yellow,$$$,w,,1,
-Stable,Base,Red,W,,M,1,
-Garrison,Base,Red,C,,M,1,
-Palisade,Base,Red,$$,,M,1,
-Scriptorium,Base,Green,$$,3,,1,
-Pharmacist,Base,Green,$$,4,,1,
-Theatre,Base,Blue,,VVV,,1,
-Altar,Base,Blue,,VVV,,1,
-Baths,Base,Blue,S,VVV,,1,
-Tavern,Base,Yellow,,,$$$$,1,
-Sawmill,Base,Brown,$$,WW,,2,
-Brickyard,Base,Brown,$$,CC,,2,
-Shelf Quarry,Base,Brown,$$,SS,,2,
-Glass Blower,Base,Grey,,G,,2,
-Drying Room,Base,Grey,,P,,2,
-Walls,Base,Red,SS,MM,,2,
-Forum,Base,Yellow,$$$C,G/P,,2,
-Caravansery,Base,Yellow,$$GP,W/C/S,,2,
-Customs House,Base,Yellow,$$$$,pg,,2,
-Courthouse,Base,Blue,WWG,VVVVV,,2,
-Horse Breeders,Base,Red,CW,,M,2,Stable
-Barracks,Base,Red,$$$$,,M,2,Garrison
-Archery Range,Base,Red,SWP,,MM,2,
-Parade Ground,Base,Red,CCG,,MM,2,
-Library,Base,Green,SWG,VVV3,,2,Scriptorium
-Dispensary,Base,Green,CCS,VVV4,,2,Pharmacist
-School,Base,Green,WPP,V2,,2,
-Laboratory,Base,Green,WGG,V1,,2,
-Statue,Base,Blue,CC,VVVV,,2,Theatre
-Temple,Base,Blue,WP,VVVV,,2,Altar
-Aqueduct,Base,Blue,SSS,VVVVV,,2,Baths
-Rostrum,Base,Blue,SW,VVVV,,2,
-Brewery,Base,Yellow,,,$$$$$$,2,
-Arsenal,Base,Red,CCCWW,,MMM,3,
-Pretorium,Base,Red,$$$$$$$$,,MMM,3,
-Academy,Base,Green,SWGG,VVV5,,3,
-Study,Base,Green,WWGP,VVV5,,3,
-Chamber of Commerce,Base,Yellow,PP,VVV,$$$ per Grey,3,
-Port,Base,Yellow,WGP,VVV,$$ per Brown,3,
-Armory,Base,Yellow,SSG,VVV,$ per Red,3,
-Palace,Base,Blue,CSWGG,VVVVVVV,,3,
-Town Hall,Base,Blue,SSSWW,VVVVVVV,,3,
-Obelisk,Base,Blue,SSG,VVVVV,,3,
-Merchants Guild,Base,Purple,CWGP,V per Yellow,$ per Yellow,Guild,
-Shipowners Guild,Base,Purple,CSGP,V per Grey or V per Brown,$ per Grey or $ per Brown,Guild,
-Builders Guild,Base,Purple,SSCWG,VV per Wonder,,Guild,
-Magistrates Guild,Base,Purple,WWCP,V per Blue,$ per Blue,Guild,
-Scientists Guild,Base,Purple,CCWW,V per Green,$ per Green,Guild,
-Moneylenders Guild,Base,Purple,SSWW,V per $$$,,Guild,
-Tacticians Guild,Base,Purple,SSCP,V per Red,$ per Red,Guild,
-Fortifications,Base,Red,SSCP,,MM,3,Palisade
-Siege Workshop,Base,Red,WWWG,,MM,3,Archery Range
-Circus,Base,Red,CCSS,,MM,3,Parade Ground
-University,Base,Green,CGP,VV6,,3,School
-Observatory,Base,Green,SPP,VV6,,3,Laboratory
-Gardens,Base,Blue,CCWW,VVVVVV,,3,Statue
-Pantheon,Base,Blue,CWPP,VVVVVV,,3,Temple
-Senate,Base,Blue,CCSP,VVVVV,,3,Rostrum
-Lighthouse,Base,Yellow,CCG,VVV,$ per Yellow,3,Tavern
-Arena,Base,Yellow,CSW,VVV,$ per Wonder,3,Brewery
+name,set,type,cost_string,passive_string,on_play_string,victory_points,age,prerequisite
+Lumber Yard,Base,Brown,,W,,,1,
+Logging Camp,Base,Brown,$,W,,,1,
+Clay Pool,Base,Brown,,C,,,1,
+Clay Pit,Base,Brown,$,C,,,1,
+Quarry,Base,Brown,,S,,,1,
+Stone Pit,Base,Brown,$,S,,,1,
+Glassworks,Base,Grey,$,G,,,1,
+Press,Base,Grey,$,P,,,1,
+Guard Tower,Base,Red,,,M,,1,
+Workshop,Base,Green,P,1,,1,1,
+Apothecary,Base,Green,G,2,,1,1,
+Stone Reserve,Base,Yellow,$$$,S,,,1,
+Clay Reserve,Base,Yellow,$$$,C,,,1,
+Wood Reserve,Base,Yellow,$$$,W,,,1,
+Stable,Base,Red,W,,M,,1,
+Garrison,Base,Red,C,,M,,1,
+Palisade,Base,Red,$$,,M,,1,
+Scriptorium,Base,Green,$$,3,,,1,
+Pharmacist,Base,Green,$$,4,,,1,
+Theatre,Base,Blue,,,,3,1,
+Altar,Base,Blue,,,,3,1,
+Baths,Base,Blue,S,,,3,1,
+Tavern,Base,Yellow,,,$$$$,,1,
+Sawmill,Base,Brown,$$,WW,,,2,
+Brickyard,Base,Brown,$$,CC,,,2,
+Shelf Quarry,Base,Brown,$$,SS,,,2,
+Glass Blower,Base,Grey,,G,,,2,
+Drying Room,Base,Grey,,P,,,2,
+Walls,Base,Red,SS,,MM,,2,
+Forum,Base,Yellow,$$$C,P/G,,,2,
+Caravansery,Base,Yellow,$$GP,W/C/S,,,2,
+Customs House,Base,Yellow,$$$$,PG,,,2,
+Courthouse,Base,Blue,WWG,,,5,2,
+Horse Breeders,Base,Red,CW,,M,,2,Stable
+Barracks,Base,Red,$$$$,,M,,2,Garrison
+Archery Range,Base,Red,SWP,,MM,,2,
+Parade Ground,Base,Red,CCG,,MM,,2,
+Library,Base,Green,SWG,3,,3,2,Scriptorium
+Dispensary,Base,Green,CCS,4,,3,2,Pharmacist
+School,Base,Green,WPP,2,,1,2,
+Laboratory,Base,Green,WGG,1,,1,2,
+Statue,Base,Blue,CC,,,4,2,Theatre
+Temple,Base,Blue,WP,,,4,2,Altar
+Aqueduct,Base,Blue,SSS,,,5,2,Baths
+Rostrum,Base,Blue,SW,,,4,2,
+Brewery,Base,Yellow,,,$$$$$$,,2,
+Arsenal,Base,Red,CCCWW,,MMM,,3,
+Pretorium,Base,Red,$$$$$$$$,,MMM,,3,
+Academy,Base,Green,SWGG,5,,3,3,
+Study,Base,Green,WWGP,5,,3,3,
+Chamber of Commerce,Base,Yellow,PP,,$$$ per Grey,3,3,
+Port,Base,Yellow,WGP,,$$ per Brown,3,3,
+Armory,Base,Yellow,SSG,,$ per Red,3,3,
+Palace,Base,Blue,CSWGG,,,7,3,
+Town Hall,Base,Blue,SSSWW,,,7,3,
+Obelisk,Base,Blue,SSG,,,5,3,
+Merchants Guild,Base,Purple,CWGP,,$ per Yellow,1 per Yellow,Guild,
+Shipowners Guild,Base,Purple,CSGP,,$ per Grey and Brown,1 per Grey and Brown,Guild,
+Builders Guild,Base,Purple,SSCWG,,,2 per Wonder,Guild,
+Magistrates Guild,Base,Purple,WWCP,,$ per Blue,1 per Blue,Guild,
+Scientists Guild,Base,Purple,CCWW,,$ per Green,1 per Green,Guild,
+Moneylenders Guild,Base,Purple,SSWW,,,1 per $$$,Guild,
+Tacticians Guild,Base,Purple,SSCP,,$ per Red,1 per Red,Guild,
+Fortifications,Base,Red,SSCP,,MM,,3,Palisade
+Siege Workshop,Base,Red,WWWG,,MM,,3,Archery Range
+Circus,Base,Red,CCSS,,MM,,3,Parade Ground
+University,Base,Green,CGP,6,,2,3,School
+Observatory,Base,Green,SPP,6,,2,3,Laboratory
+Gardens,Base,Blue,CCWW,,,6,3,Statue
+Pantheon,Base,Blue,CWPP,,,6,3,Temple
+Senate,Base,Blue,CCSP,,,5,3,Rostrum
+Lighthouse,Base,Yellow,CCG,,$ per Yellow,3,3,Tavern
+Arena,Base,Yellow,CSW,,$ per Wonder,3,3,Brewery

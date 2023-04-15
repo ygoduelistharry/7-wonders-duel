@@ -9,9 +9,10 @@ from sty import fg, bg, rs
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+
 @dataclass
-class Card:
-    '''Define a single card. Attributes match the .csv headers.'''
+class Constructable:
+    '''Attributes of a constructable object, i.e. Card or Wonder'''
     colour_key = {
         'Brown': bg(100, 50, 0) + fg.white,
         'Grey': bg.grey + fg.black,
@@ -20,19 +21,17 @@ class Card:
         'Yellow': bg.yellow + fg.black,
         'Blue': bg.blue + fg.white,
         'Purple': bg(128, 0, 128) + fg.white,
+        'Wonder': bg.black + fg.yellow
     }
-
-    card_name:              str = ''
-    card_set:               str = ''
-    card_type:              str = ''
-    card_cost_string:       str = ''
-    card_effect_passive:    str = ''
-    card_effect_on_play:    str = ''
-    card_age:               str = ''
-    card_prerequisite:      str = ''
+    name:              str = ''
+    set:               str = ''
+    cost_string:       str = ''
+    passive_string:    str = ''
+    on_play_string:    str = ''
+    victory_points:    str = ''
 
     def __post_init__(self):
-        self.card_costs = {
+        self.costs = {
             'C':0, #Clay
             'W':0, #Wood
             'S':0, #Stone
@@ -40,45 +39,63 @@ class Card:
             'G':0, #Glass
             '$':0  #Coins
         }
-        if self.card_cost_string:
-            for resource in self.card_cost_string:
-                self.card_costs[resource] += 1
+        if self.cost_string:
+            for resource in self.cost_string:
+                self.costs[resource] += 1
+
+        self.passives = {
+            'C':0,      #Clay
+            'W':0,      #Wood
+            'S':0,      #Stone
+            'P':0,      #Paper
+            'G':0,      #Glass
+            'P/G':0,    #Forum / Piraeus
+            'W/C/S':0,  #Caravansery / The Great Lighthouse
+        }
+        if '/' in str(self.passive_string):
+            self.passives[self.passive_string] += 1
+
+
+@dataclass
+class Card(Constructable):
+    '''Define a single card. Attributes match the .csv headers.'''
+    age:               str = ''
+    type:              str = ''
+    prerequisite:      str = ''
+
+    # TODO process the other strings into dicts
+    def __post_init__(self):
+        super().__post_init__()
+        self.passives.update({
+            '1':0,      #Victory Symbol (Frame)
+            '2':0,      #Victory Symbol (Wheel)
+            '3':0,      #Victory Symbol (Quill & Ink)
+            '4':0,      #Victory Symbol (Mortal & Pestle)
+            '5':0,      #Victory Symbol (Sundial)
+            '6':0       #Victory Symbol (Astrolabe)
+        })
+        if '/' not in str(self.passive_string):
+            for symbol in str(self.passive_string):
+                self.passives[symbol] += 1
 
     def __repr__(self):
-        return str(Card.colour_key[self.card_type]
-                   + self.card_name
+        return str(Card.colour_key[self.type]
+                   + self.name
                    + rs.all)
 
 
 @dataclass
-class Wonder:
+class Wonder(Constructable):
     '''Define a single wonder. Attributes match the .csv headers.'''
-    colour_key = {
-        'Wonder': bg.black + fg.white
-    }
-
-    wonder_name:              str = ''
-    wonder_set:               str = ''
-    wonder_cost_string:       str = ''
-    wonder_effect_passive:    str = ''
-    wonder_effect_on_play:    str = ''
-
     def __post_init__(self):
-        self.card_costs = {
-            'C':0, #Clay
-            'W':0, #Wood
-            'S':0, #Stone
-            'P':0, #Paper
-            'G':0, #Glass
-            '$':0  #Coins
-        }
-        if self.wonder_cost_string:
-            for resource in self.wonder_cost_string:
-                self.card_costs[resource] += 1
+        super().__post_init__()
+        if '/' not in str(self.passive_string):
+            for symbol in str(self.passive_string):
+                self.passives[symbol] += 1
 
     def __repr__(self):
         return str(Wonder.colour_key['Wonder']
-                   + self.wonder_name
+                   + self.name
                    + rs.all)
 
 
@@ -107,30 +124,33 @@ class Player:
         }
 
         self.wonder_resources = {
-            'C':0, #Clay
-            'W':0, #Wood
-            'S':0, #Stone
-            'P':0, #Paper
-            'G':0, #Glass
+            'C':0,      #Clay
+            'W':0,      #Wood
+            'S':0,      #Stone
+            'P':0,      #Paper
+            'G':0,      #Glass
+            'P/G':0,    #Piraeus
+            'W/C/S':0,  #The Great Lighthouse
         }
 
         self.gold_resources = {
-            'C':0,    #Clay
-            'W':0,    #Wood
-            'S':0,    #Stone
-            'P':0,    #Paper
-            'G':0,    #Glass
+            'C':0,      #Clay
+            'W':0,      #Wood
+            'S':0,      #Stone
+            'P':0,      #Paper
+            'G':0,      #Glass
+            'P/G':0,    #Forum
+            'W/C/S':0,  #Caravansery
         }
 
-        self.victory_state = {
-            'V':0, #Victory Points
+        self.victory_symbols = {
             '1':0, #Victory Symbol (Frame)
             '2':0, #Victory Symbol (Wheel)
             '3':0, #Victory Symbol (Quill & Ink)
             '4':0, #Victory Symbol (Mortal & Pestle)
             '5':0, #Victory Symbol (Sundial)
             '6':0, #Victory Symbol (Astrolabe)
-            '7':0  #Victory Symbol (Scales)
+            '7':0  #Victory Symbol (Law)
         }
 
     def __repr__(self):
@@ -139,7 +159,7 @@ class Player:
 
     def has_card(self, card_name):
         '''Checks if player has a card named card_name.'''
-        if any(card.card_name == card_name for card in self.cards_in_play):
+        if any(card.name == card_name for card in self.cards_in_play):
             return True
         else:
             return False
@@ -150,6 +170,17 @@ class Player:
             return True
         else:
             return False
+
+    def construct_card(self, card:Card):
+        '''Function to construct a card in turn players tableau'''
+
+        self.cards_in_play.append(card)
+
+        for resource in card.passives: #TODO change once card effect passive string is parsed
+            pass
+
+        # TODO run on construct effects
+        return
 
 
 def csv_to_class(csv_file:str, to_class, string=False):
@@ -205,43 +236,43 @@ class Game:
     def get_game_state(self):
         '''Returns a TypedDict of commonly used game state variables.'''
         # Turn player variables
-        player_index = self.common_variables.turn_player
-        player_state = self.players[player_index]
-        player_cards = player_state.cards_in_play
+        turn_player_index = self.common_variables.turn_player
+        turn_player = self.players[turn_player_index]
+        turn_player_cards = turn_player.cards_in_play
 
         # Opponent player variables
-        opponent_index = player_index ^ 1  # XOR operator (changes 1 to 0 and 0 to 1)
-        opponent_state = self.players[opponent_index]
-        opponent_cards = opponent_state.cards_in_play
+        non_turn_player_index = turn_player_index ^ 1  # XOR operator (changes 1 to 0 and 0 to 1)
+        non_turn_player = self.players[non_turn_player_index]
+        non_turn_player_cards = non_turn_player.cards_in_play
 
         # Current age variables
         current_age = self.common_variables.current_age
         slots_in_age = self.age_boards[str(current_age)].card_slots
 
         gamestate_class = TypedDict('GameState', {
-            'player_index':      int,
-            'player_state':      Player,
-            'player_cards':      list[Card],
+            'turn_player_index':        int,
+            'turn_player':              Player,
+            'turn_player_cards':        list[Card],
 
-            'opponent_index':    int,
-            'opponent_state':    Player,
-            'opponent_cards':    list[Card],
+            'non_turn_player_index':    int,
+            'non_turn_player':          Player,
+            'non_turn_player_cards':    list[Card],
 
-            'current_age':       int,
-            'slots_in_age':      list[CardSlot]
+            'current_age':              int,
+            'slots_in_age':             list[CardSlot]
         })
 
         gamestate: gamestate_class = {
-            'player_index':      player_index,
-            'player_state':      player_state,
-            'player_cards':      player_cards,
+            'turn_player':              turn_player,
+            'turn_player_index':        turn_player_index,
+            'turn_player_cards':        turn_player_cards,
 
-            'opponent_index':    opponent_index,
-            'opponent_state':    opponent_state,
-            'opponent_cards':    opponent_cards,
+            'non_turn_player':          non_turn_player,
+            'non_turn_player_index':    non_turn_player_index,
+            'non_turn_player_cards':    non_turn_player_cards,
 
-            'current_age':       current_age,
-            'slots_in_age':      slots_in_age
+            'current_age':              current_age,
+            'slots_in_age':             slots_in_age
         }
         return gamestate
 
@@ -300,14 +331,14 @@ class Game:
         # Discard or construct chosen card and remove card from board
         match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
-                if card_constructable(self.state['player_state'], self.state['opponent_state'], chosen_card) is True:
-                    self.construct_card(self.state['player_state'], chosen_card)
+                if card_constructable(self.state['turn_player'], self.state['non_turn_player'], chosen_card) is True:
+                    self.state['turn_player'].construct_card(chosen_card)
                 else:
                     print('You do not have the resources required to construct this card!')
                     return
             case 'd':  # Gain coins based on yellow buildings owned.
-                yellow_card_count = len([card for card in self.state['player_cards'] if card.card_type == 'Yellow'])
-                self.state['player_state'].coins += 2 + yellow_card_count
+                yellow_card_count = len([card for card in self.state['turn_player_cards'] if card.type == 'Yellow'])
+                self.state['turn_player'].coins += 2 + yellow_card_count
             case _:
                 print('This is not a valid action!')
                 return
@@ -316,14 +347,6 @@ class Game:
         # TODO move to DiscardPile object
         chosen_slot.card_in_slot = None
         self.turn_end()
-        return
-
-    def construct_card(self, player:Player, card:Card):
-        '''Function to construct a card in turn players tableau'''
-
-        player.cards_in_play.append(card)
-
-        # TODO run on construct effects
         return
 
     def turn_end(self):
@@ -405,7 +428,7 @@ class Game:
         self.age_boards[str(self.state['current_age'])].display_board()
         print("Player 1 >", self.players[0])
         print("Player 2 >", self.players[1])
-        print("Current turn player is Player ", str(self.state['player_index'] + 1))
+        print("Current turn player is Player ", str(self.state['turn_player_index'] + 1))
 
 
 class CardSlot:
@@ -504,7 +527,7 @@ class Age:
         age_cards = [] # Will be a list of card objects selected randomly from all_cards.
 
         for card_type, count in self.age_card_counts[str(age)].items():
-            card_pool = [card for card in Game.all_cards if str(card.card_age)==card_type]
+            card_pool = [card for card in Game.all_cards if str(card.age)==card_type]
             chosen_cards = list(self.rng.choice(card_pool, size=count, replace=False))
             age_cards.extend(chosen_cards)
 
@@ -569,16 +592,16 @@ def wonder_constructable(player:Player, opponent:Player, card:Wonder) -> bool:
 def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
     '''Calculates card cost given current player states.'''
     #TODO Account for optional gold resources (Forum and Caravansery)
-    if len(card.card_cost_string) == 0:
+    if len(card.cost_string) == 0:
         return 0
 
     # Checks if card_prerequisite string is not empty, and if present in players tableu.
-    if card.card_prerequisite and player.has_card(card.card_prerequisite):
+    if card.prerequisite and player.has_card(card.prerequisite):
         return 0
 
-    cost = card.card_costs['$']
+    cost = card.costs['$']
 
-    if set(card.card_cost_string) == {'$'}:
+    if set(card.cost_string) == {'$'}:
         return cost
 
     resources = ['C','W','S','P','G']
@@ -586,7 +609,7 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
     resource_defecit = {}
     for res in resources:
         resource_defecit[res] = max(0,
-            card.card_costs[res] -
+            card.costs[res] -
             player.grey_brown_resources[res] -
             player.wonder_resources[res]
         )
@@ -600,17 +623,8 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
         else:
             resource_cost[res] = 2 + opponent.grey_brown_resources[res]
 
-    or_pg = 0
-    or_cws = 0
-
-    if player.has_card('Forum'):
-        or_pg += 1
-    if player.has_wonder('Piraeus'):
-        or_pg += 1
-    if player.has_card('Caravansery'):
-        or_cws += 1
-    if player.has_wonder('The Great Lighthouse'):
-        or_cws += 1
+    or_pg = player.gold_resources['P/G'] + player.wonder_resources['P/G']
+    or_cws = player.gold_resources['W/C/S'] + player.wonder_resources['W/C/S']
 
     for _ in range(or_pg):
         if all([resource_defecit['P'],resource_defecit['G']]) == 0:
@@ -619,10 +633,8 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
         for res in ['P','G']:
             if resource_defecit[res] == 0:
                 resource_benefit[res] = 0
-            elif player.gold_resources[res] >= 1:
-                resource_benefit[res] = 1
             else:
-                resource_benefit[res] = opponent.grey_brown_resources[res]
+                resource_benefit[res] = resource_cost[res]
         max_benefit = max(resource_benefit, key = resource_benefit.get)
         resource_defecit[max_benefit] += -1
 
@@ -633,13 +645,10 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
         for res in ['C','W','S']:
             if resource_defecit[res] == 0:
                 resource_benefit[res] = 0
-            elif player.gold_resources[res] >= 1:
-                resource_benefit[res] = 1
             else:
-                resource_benefit[res] = opponent.grey_brown_resources[res]
+                resource_benefit[res] = resource_cost[res]
         max_benefit = max(resource_benefit, key = resource_benefit.get)
         resource_defecit[max_benefit] += -1
-
 
     for res, defecit in resource_defecit.items():
         cost += defecit * resource_cost[res]

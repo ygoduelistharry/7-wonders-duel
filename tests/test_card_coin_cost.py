@@ -4,10 +4,10 @@ from seven_wonders_duel import swd
 
 test_game = swd.Game()
 basic_resource_list = ['C','W','S','P','G']
-pre_req_card_list = [card.card_prerequisite for card in test_game.all_cards if card.card_prerequisite]
+pre_req_card_list = [card.prerequisite for card in test_game.all_cards if card.prerequisite]
 
 #Set up test cards
-test_card_list = [card.card_name for card in test_game.all_cards if card.card_prerequisite]
+test_card_list = [card.name for card in test_game.all_cards if card.prerequisite]
 test_card_list.extend([
     'Logging Camp',
     'Stone Reserve',
@@ -15,7 +15,7 @@ test_card_list.extend([
     'Caravansery'
 ])
 
-test_cards = [card for card in test_game.all_cards if card.card_name in test_card_list]
+test_cards = [card for card in test_game.all_cards if card.name in test_card_list]
 
 #Set up test player states
 player_types = [        #Player numbers:
@@ -48,7 +48,7 @@ for r in basic_resource_list:
         test_players[p].wonder_resources[r] = 3
 
 for p in ['0x_all_prereqs']:
-    test_players[p].cards_in_play = [card for card in test_game.all_cards if card.card_name in pre_req_card_list]
+    test_players[p].cards_in_play = [card for card in test_game.all_cards if card.name in pre_req_card_list]
 
 player_pairings = [   #17 Player pairings to test
     ('0x','0x'),                #0,0
@@ -73,9 +73,9 @@ player_pairings = [   #17 Player pairings to test
 test_results = []
 for p, o in player_pairings:
     for c in test_cards:
-        test_results.append((p,o,c.card_name,swd.card_coin_cost(test_players[p],test_players[o],c)))
+        test_results.append((p,o,c.name,swd.card_coin_cost(test_players[p],test_players[o],c)))
 
-@mark.parametrize("card",test_cards,ids=[card.card_name for card in test_cards])
+@mark.parametrize("card",test_cards,ids=[card.name for card in test_cards])
 @mark.parametrize("player,opponent",[(test_players[p],test_players[o]) for p, o in player_pairings],
                   ids=[p+" vs "+o for p, o in player_pairings])
 def test_check_card_coin_costs(player:swd.Player, opponent:swd.Player, card:swd.Card):
@@ -184,31 +184,31 @@ def test_check_card_coin_costs(player:swd.Player, opponent:swd.Player, card:swd.
     if player.player_number in [0]: #5/17 (5) pairings
         match opponent.player_number:
             case 0 | 7 :
-                assert coin_cost == base_case_0x[card.card_name][0]
+                assert coin_cost == base_case_0x[card.name][0]
             case 1 | 5:
-                assert coin_cost == base_case_0x[card.card_name][0]+1*base_case_0x[card.card_name][1]
+                assert coin_cost == base_case_0x[card.name][0]+1*base_case_0x[card.name][1]
             case 6:
-                assert coin_cost == base_case_0x[card.card_name][0]+3*base_case_0x[card.card_name][1]
+                assert coin_cost == base_case_0x[card.name][0]+3*base_case_0x[card.name][1]
             case _:
                 return
 
     if player.player_number in [1, 2]: #6/17 (11) pairings
         match opponent.player_number:
             case 0 | 7:
-                assert coin_cost == base_case_1x[card.card_name][0]
+                assert coin_cost == base_case_1x[card.name][0]
             case 1 | 5:
-                assert coin_cost == base_case_1x[card.card_name][0]+1*base_case_1x[card.card_name][1]
+                assert coin_cost == base_case_1x[card.name][0]+1*base_case_1x[card.name][1]
             case 6:
-                assert coin_cost == base_case_1x[card.card_name][0]+3*base_case_1x[card.card_name][1]
+                assert coin_cost == base_case_1x[card.name][0]+3*base_case_1x[card.name][1]
             case _:
                 return
 
     if player.player_number in [6, 7]: #3/17 (14) pairings
-        assert coin_cost == base_case_3x[card.card_name][0]
+        assert coin_cost == base_case_3x[card.name][0]
 
     if player.player_number in [8]: #4/17 (17) pairings
         match opponent.player_number:
             case 0 | 7:
-                assert coin_cost == base_case_all_prereqs[card.card_name][0]
+                assert coin_cost == base_case_all_prereqs[card.name][0]
             case 6:
-                assert coin_cost == base_case_all_prereqs[card.card_name][0]+3*base_case_all_prereqs[card.card_name][1]
+                assert coin_cost == base_case_all_prereqs[card.name][0]+3*base_case_all_prereqs[card.name][1]
