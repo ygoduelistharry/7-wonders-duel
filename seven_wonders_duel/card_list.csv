@@ -1,4 +1,4 @@
-name,set,type,cost_string,passive_string,on_play_string,victory_points,age,prerequisite
+name,set,colour,cost_string,passive_string,on_play_string,victory_point_string,age,prerequisite
 Lumber Yard,Base,Brown,,W,,,1,
 Logging Camp,Base,Brown,$,W,,,1,
 Clay Pool,Base,Brown,,C,,,1,
@@ -56,11 +56,11 @@ Palace,Base,Blue,CSWGG,,,7,3,
 Town Hall,Base,Blue,SSSWW,,,7,3,
 Obelisk,Base,Blue,SSG,,,5,3,
 Merchants Guild,Base,Purple,CWGP,,$ per Yellow,1 per Yellow,Guild,
-Shipowners Guild,Base,Purple,CSGP,,$ per Grey and Brown,1 per Grey and Brown,Guild,
+Shipowners Guild,Base,Purple,CSGP,,$ per Grey/Brown,1 per Grey/Brown,Guild,
 Builders Guild,Base,Purple,SSCWG,,,2 per Wonder,Guild,
 Magistrates Guild,Base,Purple,WWCP,,$ per Blue,1 per Blue,Guild,
 Scientists Guild,Base,Purple,CCWW,,$ per Green,1 per Green,Guild,
-Moneylenders Guild,Base,Purple,SSWW,,,1 per $$$,Guild,
+Moneylenders Guild,Base,Purple,SSWW,,,1/3 per $,Guild,
 Tacticians Guild,Base,Purple,SSCP,,$ per Red,1 per Red,Guild,
 Fortifications,Base,Red,SSCP,,MM,,3,Palisade
 Siege Workshop,Base,Red,WWWG,,MM,,3,Archery Range

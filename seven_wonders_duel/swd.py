@@ -1,6 +1,8 @@
 """Classes and functions to run Seven Wonders Duel game logic"""
 import os
 import csv
+from fractions import Fraction
+from math import floor
 from dataclasses import dataclass
 from typing import TypedDict
 from ast import literal_eval as leval
@@ -12,7 +14,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 @dataclass
 class Constructable:
-    '''Attributes of a constructable object, i.e. Card or Wonder'''
+    """Common attributes of a constructable object, i.e. Card or Wonder"""
     colour_key = {
         'Brown': bg(100, 50, 0) + fg.white,
         'Grey': bg.grey + fg.black,
@@ -23,12 +25,12 @@ class Constructable:
         'Purple': bg(128, 0, 128) + fg.white,
         'Wonder': bg.black + fg.yellow
     }
-    name:              str = ''
-    set:               str = ''
-    cost_string:       str = ''
-    passive_string:    str = ''
-    on_play_string:    str = ''
-    victory_points:    str = ''
+    name:                   str = ''
+    set:                    str = ''
+    cost_string:            str = ''
+    passive_string:         str = ''
+    on_play_string:         str = ''
+    victory_point_string:   str = ''
 
     def __post_init__(self):
         self.costs = {
@@ -51,35 +53,66 @@ class Constructable:
             'G':0,      #Glass
             'P/G':0,    #Forum / Piraeus
             'W/C/S':0,  #Caravansery / The Great Lighthouse
-        }
-        if '/' in str(self.passive_string):
-            self.passives[self.passive_string] += 1
-
-
-@dataclass
-class Card(Constructable):
-    '''Define a single card. Attributes match the .csv headers.'''
-    age:               str = ''
-    type:              str = ''
-    prerequisite:      str = ''
-
-    # TODO process the other strings into dicts
-    def __post_init__(self):
-        super().__post_init__()
-        self.passives.update({
             '1':0,      #Victory Symbol (Frame)
             '2':0,      #Victory Symbol (Wheel)
             '3':0,      #Victory Symbol (Quill & Ink)
             '4':0,      #Victory Symbol (Mortal & Pestle)
             '5':0,      #Victory Symbol (Sundial)
             '6':0       #Victory Symbol (Astrolabe)
-        })
-        if '/' not in str(self.passive_string):
+        }
+        if '/' in str(self.passive_string):
+            self.passives[self.passive_string] += 1
+        else:
             for symbol in str(self.passive_string):
                 self.passives[symbol] += 1
 
+        self.on_plays = {
+            'M':0,                  #Military Shields
+            '$':0,                  #Coins
+            '$ per Grey':0,         #Coin per Grey Building
+            '$ per Brown':0,        #Coin per Brown Building
+            '$ per Grey/Brown':0,   #Coin per Grey & Brown Building (Shipowners Guild)
+            '$ per Red':0,          #Coin per Red Building
+            '$ per Yellow':0,       #Coin per Yellow Building
+            '$ per Blue':0,         #Coin per Blue Building
+            '$ per Green':0,        #Coin per Green Building
+            '$ per Wonder':0        #Coin per Wonder
+        }
+        if '$ per ' in str(self.on_play_string):
+            coin_per_obj = self.on_play_string.partition(' per ')
+            self.on_plays['$ per ' + coin_per_obj[2]] += len(coin_per_obj[0])
+        else:
+            for resource in self.on_play_string:
+                self.on_plays[resource] += 1
+
+        self.victory_points = {
+            'VP':0,                 #Victory Points
+            'VP per Grey':0,        #Victory Points per Grey Building
+            'VP per Brown':0,       #Victory Points per Brown Building
+            'VP per Grey/Brown':0,  #Victory Points per Grey & Brown Building (Shipowners Guild)
+            'VP per Red':0,         #Victory Points per Red Building
+            'VP per Yellow':0,      #Victory Points per Yellow Building
+            'VP per Blue':0,        #Victory Points per Blue Building
+            'VP per Green':0,       #Victory Points per Green Building
+            'VP per Wonder':0,      #Victory Points per Wonder
+            'VP per $':0            #Victory Points per Coin
+        }
+        if ' per ' in str(self.victory_point_string):
+            vp_per_obj = self.victory_point_string.partition(' per ')
+            self.victory_points['VP per ' + vp_per_obj[2]] += Fraction(vp_per_obj[0])
+        elif self.victory_point_string:
+            self.victory_points['VP'] += int(self.victory_point_string)
+
+
+@dataclass
+class Card(Constructable):
+    """Define a single card. Attributes match the .csv headers."""
+    age:               str = ''
+    colour:            str = ''
+    prerequisite:      str = ''
+
     def __repr__(self):
-        return str(Card.colour_key[self.type]
+        return str(Card.colour_key[self.colour]
                    + self.name
                    + rs.all)
 
@@ -87,16 +120,16 @@ class Card(Constructable):
 @dataclass
 class Wonder(Constructable):
     '''Define a single wonder. Attributes match the .csv headers.'''
-    def __post_init__(self):
-        super().__post_init__()
-        if '/' not in str(self.passive_string):
-            for symbol in str(self.passive_string):
-                self.passives[symbol] += 1
-
     def __repr__(self):
         return str(Wonder.colour_key['Wonder']
                    + self.name
                    + rs.all)
+
+
+@dataclass
+class Token():
+    """Define a progress token. Attributes match the .csv headers"""
+    name: str = ''
 
 
 class Player:
@@ -133,7 +166,7 @@ class Player:
             'W/C/S':0,  #The Great Lighthouse
         }
 
-        self.gold_resources = {
+        self.yellow_resources = {
             'C':0,      #Clay
             'W':0,      #Wood
             'S':0,      #Stone
@@ -157,30 +190,17 @@ class Player:
         return str(" Coins: " + repr(self.coins)
                    + ", Board: " + repr(self.cards_in_play))
 
-    def has_card(self, card_name):
+    def has_card(self, card_name:str):
         '''Checks if player has a card named card_name.'''
         if any(card.name == card_name for card in self.cards_in_play):
             return True
-        else:
-            return False
+        return False
 
-    def has_wonder(self, wonder_name):
+    def has_wonder(self, wonder_name:str):
         '''Checks if player has a wonder named wonder_name.'''
-        if any(wonder.wonder_name == wonder_name for wonder in self.wonders_in_play):
+        if any(wonder.name == wonder_name for wonder in self.wonders_in_play):
             return True
-        else:
-            return False
-
-    def construct_card(self, card:Card):
-        '''Function to construct a card in turn players tableau'''
-
-        self.cards_in_play.append(card)
-
-        for resource in card.passives: #TODO change once card effect passive string is parsed
-            pass
-
-        # TODO run on construct effects
-        return
+        return False
 
 
 def csv_to_class(csv_file:str, to_class, string=False):
@@ -218,6 +238,8 @@ class Game:
     '''Define a single instance of a game.'''
     # TODO need to track discard pile as some wonders revive cards
     all_cards = csv_to_class('card_list.csv',Card)
+    #all_wonders = csv_to_class('wonder_list.csv',Wonder)
+    all_tokens = [Token(name='Agriculture'), Token(name='Economy'), Token(name='Architecture'), Token(name='Strategy'), Token(name='Philosphy')] #csv_to_class('token_list.csv',Token)
 
     def __init__(self, game_id=1, active=0):
         # Create a dict with first age cards and card slots:
@@ -225,7 +247,7 @@ class Game:
         self.game_id = game_id
         self.active = active
         self.players = [Player(0, 'human'), Player(1, 'human')]
-        self.common_variables = CommonVariables()
+        self.shared_state = SharedState()
         self.state = self.get_game_state()
         self.turn_count = 1
         self.display_game_state()
@@ -236,7 +258,7 @@ class Game:
     def get_game_state(self):
         '''Returns a TypedDict of commonly used game state variables.'''
         # Turn player variables
-        turn_player_index = self.common_variables.turn_player
+        turn_player_index = self.shared_state.turn_player
         turn_player = self.players[turn_player_index]
         turn_player_cards = turn_player.cards_in_play
 
@@ -246,7 +268,7 @@ class Game:
         non_turn_player_cards = non_turn_player.cards_in_play
 
         # Current age variables
-        current_age = self.common_variables.current_age
+        current_age = self.shared_state.current_age
         slots_in_age = self.age_boards[str(current_age)].card_slots
 
         gamestate_class = TypedDict('GameState', {
@@ -263,12 +285,12 @@ class Game:
         })
 
         gamestate: gamestate_class = {
-            'turn_player':              turn_player,
             'turn_player_index':        turn_player_index,
+            'turn_player':              turn_player,
             'turn_player_cards':        turn_player_cards,
 
-            'non_turn_player':          non_turn_player,
             'non_turn_player_index':    non_turn_player_index,
+            'non_turn_player':          non_turn_player,
             'non_turn_player_cards':    non_turn_player_cards,
 
             'current_age':              current_age,
@@ -287,7 +309,7 @@ class Game:
         if display is True:
             self.display_game_state()
 
-        choice = input("PLAYER " + str(self.common_variables.turn_player + 1) + ": "
+        choice = input("PLAYER " + str(self.shared_state.turn_player + 1) + ": "
                        + "Select a card to [c]onstruct or [d]iscard for coins. "
                        + "(Format is 'X#' where X is c/d and # is card position)")  # TODO Select by name or number?
         action, position = choice[0], choice[1:]
@@ -332,20 +354,21 @@ class Game:
         match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
                 if card_constructable(self.state['turn_player'], self.state['non_turn_player'], chosen_card) is True:
-                    self.state['turn_player'].construct_card(chosen_card)
+                    construct_card(self.state['turn_player'], self.state['non_turn_player'], self.shared_state, chosen_card)
                 else:
                     print('You do not have the resources required to construct this card!')
                     return
             case 'd':  # Gain coins based on yellow buildings owned.
-                yellow_card_count = len([card for card in self.state['turn_player_cards'] if card.type == 'Yellow'])
+                yellow_card_count = len([card for card in self.state['turn_player_cards'] if card.colour == 'Yellow'])
                 self.state['turn_player'].coins += 2 + yellow_card_count
+                self.shared_state.discard_pile.append(chosen_card)
             case _:
                 print('This is not a valid action!')
                 return
 
         # Remove card from board
-        # TODO move to DiscardPile object
         chosen_slot.card_in_slot = None
+
         self.turn_end()
         return
 
@@ -362,17 +385,17 @@ class Game:
 
         # Check for end of age and progress if required
         if all(self.state['slots_in_age'][s].card_in_slot is None for s in range(len(self.state['slots_in_age']))):
-            self.common_variables.progress_age()
+            self.shared_state.progress_age()
 
             # Check for game end
-            if self.common_variables.game_ended is True:
+            if self.shared_state.game_ended is True:
                 print('Game is over!')
                 return self.game_end('civilian')
 
             # Create next age board and update handy state variables
-            self.age_boards[str(self.common_variables.current_age)] = Age(self.common_variables.current_age)
+            self.age_boards[str(self.shared_state.current_age)] = Age(self.shared_state.current_age)
         else:
-            self.common_variables.change_turn_player()
+            self.shared_state.change_turn_player()
 
         # Update handy self.state variable and turn count
         self.state = self.get_game_state()
@@ -415,9 +438,9 @@ class Game:
 
         match victory_method:
             case 'military':
-                print("Player "+str(self.common_variables.turn_player)+" won by military supremacy!")
+                print("Player "+str(self.shared_state.turn_player)+" won by military supremacy!")
             case 'science':
-                print("Player "+str(self.common_variables.turn_player)+" won by scientific supremacy!")
+                print("Player "+str(self.shared_state.turn_player)+" won by scientific supremacy!")
             case 'civilian':
                 #TODO call player_with_more_points()
                 print("Player with more points won by civilian victory!")
@@ -462,16 +485,21 @@ class CardSlot:
                    )
 
 
-class CommonVariables:
+class SharedState:
     '''Class to represent all state variables shared between players (military, turn player, etc.).'''
 
-    def __init__(self, turn_player=None, current_age=1, military_track=0):
+    def __init__(self, turn_player=None, current_age=1):
         self.rng = default_rng()
         if turn_player is None:
             self.turn_player = self.rng.integers(low=0, high=1, endpoint=True)
             # Randomly select first player if none specified.
-        self.current_age = current_age  # Start in first age.
-        self.military_track = military_track  # Start military track at 0.
+        self.current_age = current_age # Start in first age.
+        self.military_track = 0 # Start military track at 0. Player 0 is -ve direction, player 1 is +ve direction.
+        tokens = list(Game.all_tokens)
+        self.rng.shuffle(tokens)
+        self.available_tokens = tokens[0:3] # Choose 3 random tokens.
+        self.unavailable_tokens = tokens[3:] # Store the rest for The Great Library.
+        self.discard_pile = [] # Create a discard pile for The Mausoleum.
         self.game_ended = False
 
     def change_turn_player(self):
@@ -589,27 +617,27 @@ def wonder_constructable(player:Player, opponent:Player, card:Wonder) -> bool:
     return True
 
 
-def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
+def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:
     '''Calculates card cost given current player states.'''
-    #TODO Account for optional gold resources (Forum and Caravansery)
-    if len(card.cost_string) == 0:
+
+    if len(obj.cost_string) == 0:
         return 0
 
     # Checks if card_prerequisite string is not empty, and if present in players tableu.
-    if card.prerequisite and player.has_card(card.prerequisite):
+    if isinstance(obj, Card) and obj.prerequisite and player.has_card(obj.prerequisite):
         return 0
 
-    cost = card.costs['$']
+    cost = obj.costs['$']
 
-    if set(card.cost_string) == {'$'}:
+    if set(obj.cost_string) == {'$'}:
         return cost
 
-    resources = ['C','W','S','P','G']
+    resources = player.grey_brown_resources.keys()
 
     resource_defecit = {}
     for res in resources:
         resource_defecit[res] = max(0,
-            card.costs[res] -
+            obj.costs[res] -
             player.grey_brown_resources[res] -
             player.wonder_resources[res]
         )
@@ -618,13 +646,13 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
 
     resource_cost = {}
     for res in resources:
-        if player.gold_resources[res] >= 1:
+        if player.yellow_resources[res] >= 1:
             resource_cost[res] = 1
         else:
             resource_cost[res] = 2 + opponent.grey_brown_resources[res]
 
-    or_pg = player.gold_resources['P/G'] + player.wonder_resources['P/G']
-    or_cws = player.gold_resources['W/C/S'] + player.wonder_resources['W/C/S']
+    or_pg = player.yellow_resources['P/G'] + player.wonder_resources['P/G']
+    or_cws = player.yellow_resources['W/C/S'] + player.wonder_resources['W/C/S']
 
     for _ in range(or_pg):
         if all([resource_defecit['P'],resource_defecit['G']]) == 0:
@@ -654,3 +682,72 @@ def card_coin_cost(player:Player, opponent:Player, card:Card) -> int:
         cost += defecit * resource_cost[res]
 
     return cost
+
+
+def construct_card(player:Player, opponent:Player, state:SharedState, card:Card):
+    '''Function to construct a card in turn players tableau'''
+
+    # Add card to card in play list.
+    player.cards_in_play.append(card)
+
+    # Check colour of constructed card and update player resources.
+    match card.colour:
+        case 'Grey' | 'Brown':
+            for resource in player.grey_brown_resources:
+                player.grey_brown_resources[resource] += card.passives[resource]
+                return
+        case 'Green':
+            for symbol in player.victory_symbols:
+                player.victory_symbols[symbol] += card.passives[symbol]
+                if card.passive[symbol] == 2:
+                    gain_progress_token(player, state)
+                return
+        case 'Yellow':
+            for resource in player.yellow_resources:
+                player.yellow_resources[resource] += card.passives[resource]
+
+    # Check on play effects and do what is appropriate.
+    for effect, value in card.on_plays.items():
+        if value == 0:
+            pass
+        match (effect, card.colour):
+            # Deal with military.
+            case ('M', _):
+                if player.player_number == 0: #Player number 0 sends military track -ve
+                    state.military_track += -value
+                elif player.player_number == 1: #Player number 1 sends military track +ve
+                    state.military_track += value
+            # Deal with normal coin gain.
+            case ('$', _):
+                player.coins += value
+            # Deal with $ per Wonder gain.
+            case ('$ per Wonder', _):
+                player.coins += value * len(player.wonders_in_play)
+            # Deal with $ per card colour you OWN.
+            case (_, 'Yellow'):
+                # Extracts colour(s) from string.
+                colours = effect.partition('$ per ')[2]
+                # Counts number of cards in play that matches the colours in the string.
+                colour_count = sum(c.colour in colours.split('/') for c in player.cards_in_play)
+                player.coins += value * colour_count
+            # Deal with $ per card colour in city with MOST.
+            case (_, 'Purple'):
+                colours = effect.partition('$ per ')[2]
+                # Same as Yellow case, but checks max count between turn player and opponent.
+                max_colour_count = max(
+                    sum(c.colour in colours.split('/') for c in player.cards_in_play),
+                    sum(c.colour in colours.split('/') for c in opponent.cards_in_play)
+                )
+                player.coins += value * max_colour_count
+
+    return
+
+def gain_progress_token(player:Player, state:SharedState, token:Token = None):
+    '''Function to select a progress token to build. If no token is chosen, input will be requested.'''
+
+    return
+
+def construct_wonder():
+    '''Function to construct a wonder in turn players tableau'''
+    #TODO all the wonder effects...
+    return

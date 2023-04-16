@@ -73,14 +73,14 @@ player_pairings = [   #17 Player pairings to test
 test_results = []
 for p, o in player_pairings:
     for c in test_cards:
-        test_results.append((p,o,c.name,swd.card_coin_cost(test_players[p],test_players[o],c)))
+        test_results.append((p,o,c.name,swd.object_coin_cost(test_players[p],test_players[o],c)))
 
 @mark.parametrize("card",test_cards,ids=[card.name for card in test_cards])
 @mark.parametrize("player,opponent",[(test_players[p],test_players[o]) for p, o in player_pairings],
                   ids=[p+" vs "+o for p, o in player_pairings])
 def test_check_card_coin_costs(player:swd.Player, opponent:swd.Player, card:swd.Card):
     '''Checks the coin cost of certain cards for various player and opponent board states.'''
-    coin_cost = swd.card_coin_cost(player,opponent,card)
+    coin_cost = swd.object_coin_cost(player,opponent,card)
 
     #Base costs all assume an opponent who has nothing at all in play.
     #The cost increase is how much the cost would increase to the purchasing player if their opponent had 1 of each
