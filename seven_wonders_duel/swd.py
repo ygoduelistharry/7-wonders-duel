@@ -150,6 +150,9 @@ class Card(Constructable):
 @dataclass
 class Wonder(Constructable):
     '''Define a single wonder. Attributes match the .csv headers.'''
+    wonder_effect:     str = ''
+    go_again:          bool = False
+
     def __repr__(self):
         return str(Wonder.colour_key['Wonder']
                    + self.name
@@ -158,7 +161,14 @@ class Wonder(Constructable):
 @dataclass
 class Token():
     """Define a progress token. Attributes match the .csv headers"""
-    name: str = ''
+    colour_key = {'Token': bg(0, 128, 0) + fg.black}
+    name:           str = ''
+    token_effect:   str = ''
+
+    def __repr__(self):
+        return str(Token.colour_key['Token']
+                   + self.name
+                   + rs.all)
 
 
 class Player:
@@ -234,10 +244,9 @@ class Player:
 
 class Game:
     '''Define a single instance of a game.'''
-    # TODO need to track discard pile as some wonders revive cards
     all_cards = csv_to_class('card_list.csv',Card)
-    #all_wonders = csv_to_class('wonder_list.csv',Wonder)
-    all_tokens = [Token(name='Agriculture'), Token(name='Economy'), Token(name='Architecture'), Token(name='Strategy'), Token(name='Philosphy')] #csv_to_class('token_list.csv',Token)
+    all_wonders = csv_to_class('wonder_list.csv',Wonder)
+    all_tokens = csv_to_class('token_list.csv',Token)
 
     def __init__(self, game_id=1, active=0, first_turn_player_index = None):
         # Create a dict with first age cards and card slots:
@@ -357,8 +366,6 @@ class Game:
 
     def turn_end(self):
         '''Run end of turn functions'''
-        # Update player passive variables (resources/VP/science symbols)
-        self.update_player_states()
 
         # Check for science/military win and end game if required
         self.check_alt_victory()
@@ -386,10 +393,6 @@ class Game:
         return self.display_game_state()
 
     #TODO Give meaning to turn end functions
-    def update_player_states(self):
-        '''Updates all player passive variables (resources/VP/science symbols etc.).'''
-        return
-
     def check_alt_victory(self):
         '''Checks for alternate victory conditions (military and science) and ends game if required.'''
         return

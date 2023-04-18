@@ -1,0 +1,13 @@
+name,set,cost_string,passive_string,on_play_string,victory_point_string,wonder_effect,go_again
+The Appian Way,Base,PCCSS,,$$$,,Lose3$,True
+Circus Maximus,Base,GWSS,,M,3,DestroyGrey,False
+The Colossus,Base,GCCC,,MM,3,,False
+The Great Library,Base,PGWWW,,,4,GainToken,False
+The Great Lighthouse,Base,PPSW,W/C/S,,4,,False
+The Hanging Gardens,Base,PGWW,,$$$$$$,3,,True
+The Mausoleum,Base,PGGCC,,,2,ReviveCard,False
+Piraeus,Base,CSWW,P/G,,2,,True
+The Pyramids,Base,PSSS,,,9,,False
+The Sphinx,Base,GGCS,,,6,,True
+The Statue of Zeus,Base,PPCWS,,M,3,DestroyBrown,False
+The Temple of Artemis,Base,PGSW,,$$$$$$$$$$$$,,,True
