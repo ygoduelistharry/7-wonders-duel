@@ -349,6 +349,9 @@ class Game:
                 cost = object_coin_cost(self.get_player('turn'), self.get_player('non_turn'), chosen_card)
                 if cost <= self.get_player('turn').coins:
                     self.get_player('turn').coins += - cost
+                    # Account for Economy token.
+                    if cost > 0 and 'Economy' in [t.name for t in self.get_player('non_turn').tokens_in_play]:
+                        self.get_player('non_turn').coins += cost - chosen_card.costs['$']
                     self.construct_card(chosen_card)
                 else:
                     print('You do not have the resources/coins required to construct this card!')
@@ -483,6 +486,9 @@ class Game:
             match (effect, card.colour):
                 # Deal with military.
                 case ('M', _):
+                    # Account for Strategy progress token
+                    if 'Strategy' in [token.name for token in player.tokens_in_play]:
+                        value += 1
                     if player.player_number == 0: #Player number 0 sends military track -ve
                         self.military_track += -value
                     elif player.player_number == 1: #Player number 1 sends military track +ve
@@ -548,7 +554,17 @@ class Game:
                 print("Please select a valid token!")
                 return self.gain_progress_token(player, token)
 
-        player.tokens_in_play.append(self.available_tokens.pop(choice))
+        token = self.available_tokens[choice]
+        player.tokens_in_play.append(token)
+        del self.available_tokens[choice]
+
+        # Account for Urbanism and Agriculture token.
+        if token.name in ['Agriculture', 'Urbanism']:
+            player.coins += 6
+
+        # Account for Law token.
+        if token.name == 'Law':
+            player.victory_symbols['7'] += 1
 
         print(f"Player {player.player_number + 1}'s progress tokens:")
         return print(player.tokens_in_play)
@@ -684,11 +700,14 @@ class Age:
 def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:
     '''Calculates card cost given current player states.'''
 
-    if len(obj.cost_string) == 0:
-        return 0
-
     # Checks if card_prerequisite string is not empty, and if present in players tableu.
     if isinstance(obj, Card) and obj.prerequisite and player.has_card(obj.prerequisite):
+        # Account for Urbanism token.
+        if 'Urbanism' in [token.name for token in player.tokens_in_play]:
+            return -4
+        return 0
+
+    if len(obj.cost_string) == 0:
         return 0
 
     cost = obj.costs['$']
