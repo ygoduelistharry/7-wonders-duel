@@ -227,7 +227,10 @@ class Player:
 
     def __repr__(self):
         return str(" Coins: " + repr(self.coins)
-                   + ", Board: " + repr(self.cards_in_play))
+                   + "\nCards: " + repr(self.cards_in_play)
+                   + "\nWonders: " + repr(self.wonders_in_play)
+                   + "\nTokens:" + repr(self.tokens_in_play)
+                )
 
     def has_card(self, card_name:str):
         '''Checks if player has a card named card_name.'''
@@ -300,16 +303,16 @@ class Game:
             self.display_game_state()
 
         choice = input("PLAYER " + str(self.turn_player_index + 1) + ": "
-                       + "Select a card to [c]onstruct or [d]iscard for coins. "
-                       + "(Format is 'X#' where X is c/d and # is card position)")  # TODO Select by name or number?
+                       + "Select a card or [w]onder to [c]onstruct, or [d]iscard card for coins. "
+                       + "(Format is 'XY' where X is c/d/w and Y is card position)")  # TODO Select by name or number?
         action, position = choice[0], choice[1:]
 
         if action == 'q':
             print("Game has been quit")
             return
 
-        if action not in ['c','d']:
-            print("Select a valid action! ([c]onstruct or [d]iscard)")
+        if action not in ['c','d','w']:
+            print("Select a valid action! ([c]onstruct card, construct [w]onder, or [d]iscard)")
             return self.request_player_input(display=False)
 
         if not position.isdigit():
@@ -432,10 +435,15 @@ class Game:
     def display_game_state(self):
         '''Print a visual representation of the current game state.'''
 
+        print("\n-------- \n"+
+              f"Turn #{self.turn_count}\n"+
+              "--------")
         self.age_boards[str(self.current_age)].display_board()
-        print("Player 1 >", self.players[0])
-        print("Player 2 >", self.players[1])
-        print("Current turn player is Player ", str(self.turn_player_index + 1))
+        print("\nPlayer 1 >" + repr(self.players[0]) +
+            "\n\nPlayer 2 >" + repr(self.players[1]) +
+            "\n\nCurrent turn player is Player " + str(self.turn_player_index + 1)
+            + "\n"
+        )
 
     def get_valid_moves(self) -> list[str]:
         '''Returns list of valid moves for given board state and player states.'''
@@ -451,7 +459,7 @@ class Game:
             opponent = self.players[self.turn_player_index ^ 1]
         # Add card to card in play list.
         player.cards_in_play.append(card)
-
+        print(f"Player {player.player_number+1} has constructed the {card}!\n")
         # Check colour of constructed card and update player resources.
         match card.colour:
             case 'Grey' | 'Brown':
@@ -461,7 +469,7 @@ class Game:
             case 'Green':
                 for symbol in player.victory_symbols:
                     player.victory_symbols[symbol] += card.passives[symbol]
-                    if player.victory_symbols[symbol] == 2:
+                    if player.victory_symbols[symbol] == 2 and card.passives[symbol] == 1:
                         self.gain_progress_token()
                 return
             case 'Yellow':
@@ -511,8 +519,39 @@ class Game:
 
     def gain_progress_token(self, player:Player = None, token:Token = None):
         '''Function to select a progress token to build. If no token is chosen, input will be requested.'''
+
+        if not self.available_tokens:
+            return print("No progress tokens available!")
+
+        if len(self.available_tokens) == 1:
+            print("Only 1 token available.")
+            choice = 0
+            token = self.available_tokens[choice]
+
         if player is None:
             player = self.players[self.turn_player_index]
+
+        if token is None:
+            token_string = ''
+            for i, t in enumerate(self.available_tokens):
+                token_string = token_string+"#"+str(i)+": "+repr(t)+" "
+            print(token_string)
+            choice = input("Select an available token! ")
+
+            if not choice.isdigit():
+                print("Choice must be an integer!")
+                return self.gain_progress_token(player, token)
+
+            choice = int(choice)
+
+            if choice < 0 or choice >= len(self.available_tokens):
+                print("Please select a valid token!")
+                return self.gain_progress_token(player, token)
+
+        player.tokens_in_play.append(self.available_tokens.pop(choice))
+
+        print(f"Player {player.player_number + 1}'s progress tokens:")
+        return print(player.tokens_in_play)
 
     def change_turn_player(self):
         '''Function to change current turn player'''
