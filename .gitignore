@@ -3,3 +3,4 @@ __pycache__
 .idea
 .vscode
 .pytest_cache
+construction_logs_1.pkl

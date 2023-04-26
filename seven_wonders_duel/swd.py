@@ -251,12 +251,16 @@ class Game:
     all_wonders = csv_to_class('wonder_list.csv',Wonder)
     all_tokens = csv_to_class('token_list.csv',Token)
 
-    def __init__(self, game_id=1, active=0, first_turn_player_index = None):
+    def __init__(self, game_id=1, active=False, first_turn_player_index=None, log=False, random_moves = False):
         # Create a dict with first age cards and card slots:
         self.rng = default_rng()
         self.age_boards = {'1':Age(1)}
         self.game_id = game_id
         self.active = active
+        if active is True:
+            self.random_moves = False
+        else:
+            self.random_moves = random_moves
         self.players = [Player(0, 'human'), Player(1, 'human')]
         self.turn_count = 1
         if first_turn_player_index is None:
@@ -270,6 +274,8 @@ class Game:
         self.unavailable_tokens = tokens[3:] # Store the rest for The Great Library.
         self.discard_pile = [] # Create a discard pile for The Mausoleum.
         self.game_ended = False
+        self.log = log
+        self.construction_log = {}
         self.display_game_state()
 
     def __repr__(self):
@@ -296,7 +302,7 @@ class Game:
         # TODO When using AI, no need for player input.
         '''Function to begin requesting player input.'''
 
-        if self.active == 0:
+        if self.active is False:
             return
 
         if display is True:
@@ -347,8 +353,25 @@ class Game:
         match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
                 cost = object_coin_cost(self.get_player('turn'), self.get_player('non_turn'), chosen_card)
+
+                # Log for debugging cost calculation function.
+                if self.log is True:
+                    self.construction_log[f'Game {self.game_id}, Turn {self.turn_count}'] = {
+                        'card name':chosen_card.name,
+                        'card colour':chosen_card.colour,
+                        'card cost':chosen_card.costs,
+                        'cost':cost,
+                        'turn_player_gb':self.get_player('turn').grey_brown_resources.copy(),
+                        'turn_player_w':self.get_player('turn').wonder_resources.copy(),
+                        'turn_player_y':self.get_player('turn').yellow_resources.copy(),
+                        'opp_player_gb':self.get_player('non_turn').grey_brown_resources.copy(),
+                        'turn_player_tokens':self.get_player('turn').tokens_in_play.copy(),
+                        'opp_player_tokens':self.get_player('non_turn').tokens_in_play.copy()
+                    }
+
                 if cost <= self.get_player('turn').coins:
                     self.get_player('turn').coins += - cost
+                    print(f"Player {self.turn_player_index+1} paid {cost} coins.")
                     # Account for Economy token.
                     if cost > 0 and 'Economy' in [t.name for t in self.get_player('non_turn').tokens_in_play]:
                         self.get_player('non_turn').coins += cost - chosen_card.costs['$']
@@ -527,7 +550,7 @@ class Game:
         '''Function to select a progress token to build. If no token is chosen, input will be requested.'''
 
         if not self.available_tokens:
-            return print("No progress tokens available!")
+            return print("No progress tokens available!")   
 
         if len(self.available_tokens) == 1:
             print("Only 1 token available.")
@@ -537,7 +560,10 @@ class Game:
         if player is None:
             player = self.players[self.turn_player_index]
 
-        if token is None:
+        if self.random_moves is True:
+            choice = self.rng.integers(0, len(self.available_tokens))
+
+        elif token is None:
             token_string = ''
             for i, t in enumerate(self.available_tokens):
                 token_string = token_string+"#"+str(i)+": "+repr(t)+" "
@@ -698,25 +724,29 @@ class Age:
 
 
 def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:
-    '''Calculates card cost given current player states.'''
+    '''Calculates card cost given current player states. Currently outputs a list of relevant params for debugging.'''
 
     # Checks if card_prerequisite string is not empty, and if present in players tableu.
     if isinstance(obj, Card) and obj.prerequisite and player.has_card(obj.prerequisite):
-        # Account for Urbanism token.
+        # Account for coin gain from Urbanism token.
         if 'Urbanism' in [token.name for token in player.tokens_in_play]:
             return -4
         return 0
 
+    # Return 0 if card is free.
     if len(obj.cost_string) == 0:
         return 0
 
+    # Base cost is always the coin cost (if present).
     cost = obj.costs['$']
 
+    # Checks if coin cost is the only cost - if so, return early.
     if set(obj.cost_string) == {'$'}:
         return cost
 
     resources = player.grey_brown_resources.keys()
 
+    # Calculates how many of each resource the player doesn't already own.
     resource_defecit = {}
     for res in resources:
         resource_defecit[res] = max(0,
@@ -727,6 +757,7 @@ def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:
     if sum(resource_defecit.values()) == 0:
         return cost
 
+    # Calculates the cost of each resource given the opponent's board state.
     resource_cost = {}
     for res in resources:
         if player.yellow_resources[res] >= 1:
@@ -734,33 +765,57 @@ def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:
         else:
             resource_cost[res] = 2 + opponent.grey_brown_resources[res]
 
+    # Calculates how much benefit can be gained by allocating optional resources.
+    resource_benefit = {}
+    for res in resources:
+        if resource_defecit[res] == 0:
+            resource_benefit[res] = 0
+        else:
+            resource_benefit[res] = resource_cost[res]
+
+    # Calculates how many of each set of optional resources the player has.
     or_pg = player.yellow_resources['P/G'] + player.wonder_resources['P/G']
     or_cws = player.yellow_resources['W/C/S'] + player.wonder_resources['W/C/S']
 
+    # Account for P/G optional resources (Forum/Piraeus)
     for _ in range(or_pg):
-        if all([resource_defecit['P'],resource_defecit['G']]) == 0:
+        # Makes a dict of the relevant benefit values.
+        pg_benefit = {k:v for k,v in resource_benefit.items() if k in ['P','G']}
+        # If all benefits are 0, player is not short of any resource the optionals can give, so break early.
+        if all(value == 0 for value in pg_benefit.values()):
             break
-        resource_benefit = {}
-        for res in ['P','G']:
-            if resource_defecit[res] == 0:
-                resource_benefit[res] = 0
-            else:
-                resource_benefit[res] = resource_cost[res]
-        max_benefit = max(resource_benefit, key = resource_benefit.get)
+        # Find resource allocation which gives highest benefit (cost reduction).
+        max_benefit = max(pg_benefit, key = pg_benefit.get)
+        # Reduce the defecit by 1.
         resource_defecit[max_benefit] += -1
+        # If the defecit is reduced to 0, no more benefit to be gained from allocation.
+        if resource_defecit[max_benefit] == 0:
+            resource_benefit[max_benefit] = 0
 
+    # Account for C/W/S optional resources (Caravansery/The Great Lighthouse)
+    # Same as above.
     for _ in range(or_cws):
-        if all([resource_defecit['C'],resource_defecit['W'],resource_defecit['S']]) == 0:
+        cws_benefit = {k:v for k,v in resource_benefit.items() if k in ['C','W','S']}
+        if all(value == 0 for value in cws_benefit.values()):
             break
-        resource_benefit = {}
-        for res in ['C','W','S']:
-            if resource_defecit[res] == 0:
-                resource_benefit[res] = 0
-            else:
-                resource_benefit[res] = resource_cost[res]
-        max_benefit = max(resource_benefit, key = resource_benefit.get)
+        max_benefit = max(cws_benefit, key = cws_benefit.get)
         resource_defecit[max_benefit] += -1
+        if resource_defecit[max_benefit] == 0:
+            resource_benefit[max_benefit] = 0
 
+    # Account for Masonry (reduce cost by 2 highest cost resources)
+    # Same as above, but checks if constructing a Blue card first.
+    if hasattr(obj,'colour'):
+        if 'Masonry' in [token.name for token in player.tokens_in_play] and obj.colour == 'Blue':
+            for _ in range(2):
+                if all(value == 0 for value in resource_benefit.values()):
+                    break
+                max_benefit = max(resource_benefit, key = resource_benefit.get)
+                resource_defecit[max_benefit] += -1
+                if resource_defecit[max_benefit] == 0:
+                    resource_benefit[max_benefit] = 0
+
+    # Caclulate total cost based on remaining resource defecit and costs
     for res, defecit in resource_defecit.items():
         cost += defecit * resource_cost[res]
 
