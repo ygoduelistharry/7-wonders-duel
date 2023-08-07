@@ -6,6 +6,7 @@ from math import floor
 from dataclasses import dataclass
 from ast import literal_eval as leval
 from numpy.random import default_rng
+from transitions import Machine
 from sty import fg, bg, rs
 
 # Random helper stuff not directly related to game logic:
@@ -159,7 +160,7 @@ class Wonder(Constructable):
                    + rs.all)
 
 @dataclass
-class Token():
+class Token:
     """Define a progress token. Attributes match the .csv headers"""
     colour_key = {'Token': bg(0, 128, 0) + fg.black}
     name:           str = ''
@@ -245,11 +246,69 @@ class Player:
         return False
 
 
+class DecisionState:
+    '''Defines the state a Game object can be in and which actions can be chosen'''
+    def __init__(self, name:str):
+        self.name = name
+
+
 class Game:
     '''Define a single instance of a game.'''
     all_cards = csv_to_class('card_list.csv',Card)
     all_wonders = csv_to_class('wonder_list.csv',Wonder)
     all_tokens = csv_to_class('token_list.csv',Token)
+
+    # Define states and transitions to model players decision making during game.
+    # To be passed to a Machine() object from transitions module.
+    states = [
+        'game_start', #initial state
+        'main_action', #main gameplay decision: construct card, discard card, construct wonder
+        'card_for_wonder', #if constructing a wonder, select what card to discard for it
+        'card_for_mausoleum', #if constructing Mausoleum, select card to revive
+        'card_for_circus_maximus', #if constructing Circus Maximus, select card to destroy
+        'card_for_statue_of_zeus', #if constructing Statue of Zeus, select card to destroy
+        'token_for_great_library', #if constructing The Great Library, select token to gain
+        'post_construction', #update players and boards after building a wonder or card
+        'token', #if 2 of same type symbols collected, select token to gain
+        'end_of_turn', #run logic involing end of the turn (checking victory, transtioning to next age etc.)
+        'start_player', #at end of age, lowest military player selects starting player of new age
+        'game_end'
+    ]
+    
+    #TODO finish transitions
+    transitions = [
+        # Start the game
+        {'trigger':'start_new_game', 'source':'game_start', 'dest':'main_action'},
+
+        ## FROM 'main_action' STATE ##
+            # Player selects a card to discard for coins
+            {'trigger':'discard_card', 'source':'main_action', 'dest':'end_of_turn', 'condition':'card_selectable'},
+
+            # Player selects a card to construct
+            {'trigger':'construct_card', 'source':'main_action', 'dest':'post_construction', 'condition':'card_constructable'},
+
+            # Player selects a wonder to construct
+            {'trigger':'construct_wonder', 'source':'main_action', 'dest':'card_for_wonder', 'condition':'wonder_constructable'},
+
+        ## FROM 'card_for_wonder' STATE (and other unique wonder abilities) ##
+            # Player chooses a card to place under the wonder
+            # and wonder built was Mausoleum/Circus Maximus/The Great Library
+            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_mausoleum', 'condition':['built_mausoleum', 'card_selectable']},
+            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_circus_maximus', 'condition':['built_circus_maximus', 'card_selectable']},  
+            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_statue_of_zeus', 'condition':['built_statue_of_zeus', 'card_selectable']},
+            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'token_for_great_library', 'condition':['built_great_library', 'card_selectable']},
+
+            {'trigger':'select_card_for_mausoleum', 'source':'card_for_mausoleum', 'dest':'post_construction', 'condition':['selectable_by_mausoleum']},
+            {'trigger':'select_card_for_circus_maximus', 'source':'card_for_circus_maximus', 'dest':'post_construction', 'condition':['selectable_by_circus_maximus']}, 
+            {'trigger':'select_card_for_statue_of_zeus', 'source':'card_for_statue_of_zeus', 'dest':'post_construction', 'condition':['selectable_by_statue_of_zeus']},
+            {'trigger':'select_token_for_great_library', 'source':'token_for_great_library', 'dest':'post_construction', 'condition':['selectable_by_great_library']},      
+
+            # If wonder built is NONE of the above
+            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'post_construction', 'condition':'card_selectable'}
+
+        ## FROM 'post_construction' STATE ###
+
+    ]
 
     def __init__(self, game_id=1, active=False, first_turn_player_index=None, log=False, random_moves = False):
         # Create a dict with first age cards and card slots:
@@ -550,7 +609,7 @@ class Game:
         '''Function to select a progress token to build. If no token is chosen, input will be requested.'''
 
         if not self.available_tokens:
-            return print("No progress tokens available!")   
+            return print("No progress tokens available!")
 
         if len(self.available_tokens) == 1:
             print("Only 1 token available.")
