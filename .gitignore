@@ -1,6 +1,7 @@
-venv
+.venv
 __pycache__
 .idea
 .vscode
 .pytest_cache
 construction_logs_1.pkl
+seven_wonders_duel/swd_fsm.py

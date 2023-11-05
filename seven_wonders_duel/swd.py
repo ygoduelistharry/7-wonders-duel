@@ -6,8 +6,10 @@ from math import floor
 from dataclasses import dataclass
 from ast import literal_eval as leval
 from numpy.random import default_rng
-from transitions import Machine
+from transitions import State
+from transitions.extensions import GraphMachine
 from sty import fg, bg, rs
+from enum import Enum, auto
 
 # Random helper stuff not directly related to game logic:
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -109,7 +111,8 @@ class Constructable:
             '$ per Yellow':0,       #Coin per Yellow Building
             '$ per Blue':0,         #Coin per Blue Building
             '$ per Green':0,        #Coin per Green Building
-            '$ per Wonder':0        #Coin per Wonder
+            '$ per Wonder':0,       #Coin per Wonder
+            'x':0                   #Opponent loses x coins
         }
         if '$ per ' in str(self.on_play_string):
             coin_per_obj = self.on_play_string.partition(' per ')
@@ -171,7 +174,6 @@ class Token:
                    + self.name
                    + rs.all)
 
-
 class Player:
     '''Define a class for play to track tableau cards, money, etc.'''
 
@@ -182,10 +184,10 @@ class Player:
 
         # Update as card is chosen through Game.construct_card method:
         self.coins = 7
-        self.cards_in_play = []
-        self.wonders_in_hand = []
-        self.wonders_in_play = []
-        self.tokens_in_play = []
+        self.cards_in_play:     list[Card] = []
+        self.wonders_in_hand:   list[Wonder] = []
+        self.wonders_in_play:   list[Wonder] = []
+        self.tokens_in_play:    list[Token] = []
 
         # Passive variables can be updated anytime based on cards_in_play via self.update() method.
         self.grey_brown_resources = {
@@ -245,11 +247,149 @@ class Player:
             return True
         return False
 
+class CardSlot:
+    '''Define a card slot on board to represent selectability, visibility, etc.'''
+    # TODO covered_by doesnt work when covered by 0 only (age 2 pos 2, age 3 pos 2).
+    # TODO Changed .csv to "0" instead of 0 to fix above, but would like to fix here.
+    def __init__(self, card_in_slot:Card=None, card_board_position=None, game_age=None,
+                 card_visible=1, card_selectable=0, covered_by=None, row=None):
+        self.card_board_position    = card_board_position
+        self.row                    = row
+        self.game_age               = game_age
+        self.card_in_slot           = card_in_slot
+        self.card_visible           = card_visible
+        self.card_selectable        = card_selectable
+        if covered_by:
+            self.covered_by = [int(card) for card in str(covered_by).split(" ")]
+        else:
+            self.covered_by = []
 
-class DecisionState:
-    '''Defines the state a Game object can be in and which actions can be chosen'''
-    def __init__(self, name:str):
-        self.name = name
+    def __repr__(self):  # How the cards in structure are displayed to the players.
+        if self.card_in_slot is None:
+            return str("")
+
+        if self.card_visible == 0:
+            return str("#" + repr(self.card_board_position)
+                       + " Hidden " + repr(self.covered_by)
+                       )
+
+        return str("#" + repr(self.card_board_position) + " "
+                   + repr(self.card_in_slot)
+                   )
+
+class Age:
+    '''Class to define a game age and represent the unique board layouts.'''
+
+    all_card_slots = csv_to_class('age_layout.csv', CardSlot)
+
+    ages = [1,2,3]
+    age_card_counts = {
+        '1':{'1':20},
+        '2':{'2':20},
+        '3':{'3':17,'Guild':3}
+    }
+    age_layouts = {}
+
+    for age in ages:
+        age_layout = []
+        for slot in all_card_slots:
+            if slot.game_age == age:
+                age_layout.append(slot)
+        age_layouts[str(age)] = age_layout
+
+    # Generates a dict of lists holding initial card slot details for each age.
+    # Couldn't use nested dict/list comprehension because inner comprehesions cant access outer scope to iterate over,
+    # namely all_card_slots.
+
+    def __init__(self, age):
+        self.rng = default_rng()
+        self.age = age
+        self.card_slots = self.prepare_age_board(age)
+
+    def __repr__(self):
+        return str('Age ' + str(self.age))
+
+    # Init functions:
+
+    def prepare_age_board(self, age):
+        '''Generates a game board for a specified age'''
+        # Randomly select cards from card pool(s) based on age, card type, and quantity specified in age_card_counts.
+        age_cards = [] # Will be a list of card objects selected randomly from all_cards.
+
+        for card_type, count in self.age_card_counts[str(age)].items():
+            card_pool = [card for card in Game.all_cards if str(card.age)==card_type]
+            chosen_cards = list(self.rng.choice(card_pool, size=count, replace=False))
+            age_cards.extend(chosen_cards)
+
+        self.rng.shuffle(age_cards) # Shuffle required when multiple card types are selected (i.e. 3rd Age).
+
+        initial_age_board = self.age_layouts[str(age)] # Selects appropriate list of CardSlot objects for age.
+
+        if len(initial_age_board) != len(age_cards):
+            return print('Number of card slots in chosen age does not match the number of cards selected!')
+
+        # Place card objects into card slots
+        for position, card in enumerate(age_cards):
+            initial_age_board[position].card_in_slot = card
+
+        return initial_age_board
+
+    def update_all_slots(self):
+        '''Updates all slots on board as per update_slot method'''
+        for slot in range(len(self.card_slots)):
+            self.update_slot(slot)  # Update each slot for visibility and selectability.
+
+    def update_slot(self, slot):
+        '''Updates card in a single slot for visibility, selectability, etc.'''
+        if self.card_slots[slot].covered_by:  # Checks whether there are still cards covering this card.
+            # Apparently the pythonic way to check a list is not empty is to see if the list is true... ¯\_(ツ)_/¯
+            for covering_card in self.card_slots[slot].covered_by:  # Loops through list of
+                # covering cards. Does it backwards to avoid index errors.
+                if self.card_slots[covering_card].card_in_slot is None:  # Checks if covering card has been taken.
+                    self.card_slots[slot].covered_by.remove(covering_card)  # If covering card has been taken,
+                    # remove it from list of covering cards.
+
+        if not self.card_slots[slot].covered_by:  # If no more covering cards, make card visible and selectable.
+            self.card_slots[slot].card_selectable = 1
+            self.card_slots[slot].card_visible = 1
+
+    def display_board(self):
+        '''Prints visual representation of cards remaining on the board for this age'''
+        cards = self.card_slots
+        rows = max(self.card_slots[slot].row for slot in range(len(self.card_slots)))
+        for row in reversed(range(int(rows) + 1)):
+            print("Row", str(row + 1), ":", [card for card in cards if int(card.row) == row])
+
+class Action(Enum):
+    """Define enum of valid actions for a Move"""
+    DRAFT_WONDER = auto()
+    CONSTRUCT_CARD = auto()
+    DISCARD_CARD = auto()
+    CONSTRUCT_WONDER = auto()
+
+@dataclass
+class Move:
+    """Define a move"""
+    action:     Action
+    wonder:     Wonder = None
+    card:       Card = None
+    special:    Card | Token = None
+    cost:       int = 0
+
+    def __repr__(self):
+        match self.action:
+            case Action.DRAFT_WONDER:
+                return str("Draft " + self.wonder.name)
+            case Action.CONSTRUCT_CARD:
+                return str("Construct " + self.card.name)
+            case Action.DISCARD_CARD:
+                return str("Discard " + self.card.name)
+            case Action.CONSTRUCT_WONDER:
+                if self.special is None:
+                    return str("Construct " + self.wonder.name + ", discarding " + self.card.name)
+                else:
+                    return str("Construct " + self.wonder.name + ", discarding " + self.card.name +
+                               ", selecting " + self.special.name)
 
 
 class Game:
@@ -259,67 +399,40 @@ class Game:
     all_tokens = csv_to_class('token_list.csv',Token)
 
     # Define states and transitions to model players decision making during game.
-    # To be passed to a Machine() object from transitions module.
+    # To be passed to a Machine() object from 'transitions' module.
     states = [
-        'game_start', #initial state
-        'main_action', #main gameplay decision: construct card, discard card, construct wonder
-        'card_for_wonder', #if constructing a wonder, select what card to discard for it
-        'card_for_mausoleum', #if constructing Mausoleum, select card to revive
-        'card_for_circus_maximus', #if constructing Circus Maximus, select card to destroy
-        'card_for_statue_of_zeus', #if constructing Statue of Zeus, select card to destroy
-        'token_for_great_library', #if constructing The Great Library, select token to gain
-        'post_construction', #update players and boards after building a wonder or card
-        'token', #if 2 of same type symbols collected, select token to gain
-        'end_of_turn', #run logic involing end of the turn (checking victory, transtioning to next age etc.)
-        'start_player', #at end of age, lowest military player selects starting player of new age
-        'game_end'
-    ]
-    
-    #TODO finish transitions
-    transitions = [
-        # Start the game
-        {'trigger':'start_new_game', 'source':'game_start', 'dest':'main_action'},
-
-        ## FROM 'main_action' STATE ##
-            # Player selects a card to discard for coins
-            {'trigger':'discard_card', 'source':'main_action', 'dest':'end_of_turn', 'condition':'card_selectable'},
-
-            # Player selects a card to construct
-            {'trigger':'construct_card', 'source':'main_action', 'dest':'post_construction', 'condition':'card_constructable'},
-
-            # Player selects a wonder to construct
-            {'trigger':'construct_wonder', 'source':'main_action', 'dest':'card_for_wonder', 'condition':'wonder_constructable'},
-
-        ## FROM 'card_for_wonder' STATE (and other unique wonder abilities) ##
-            # Player chooses a card to place under the wonder
-            # and wonder built was Mausoleum/Circus Maximus/The Great Library
-            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_mausoleum', 'condition':['built_mausoleum', 'card_selectable']},
-            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_circus_maximus', 'condition':['built_circus_maximus', 'card_selectable']},  
-            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'card_for_statue_of_zeus', 'condition':['built_statue_of_zeus', 'card_selectable']},
-            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'token_for_great_library', 'condition':['built_great_library', 'card_selectable']},
-
-            {'trigger':'select_card_for_mausoleum', 'source':'card_for_mausoleum', 'dest':'post_construction', 'condition':['selectable_by_mausoleum']},
-            {'trigger':'select_card_for_circus_maximus', 'source':'card_for_circus_maximus', 'dest':'post_construction', 'condition':['selectable_by_circus_maximus']}, 
-            {'trigger':'select_card_for_statue_of_zeus', 'source':'card_for_statue_of_zeus', 'dest':'post_construction', 'condition':['selectable_by_statue_of_zeus']},
-            {'trigger':'select_token_for_great_library', 'source':'token_for_great_library', 'dest':'post_construction', 'condition':['selectable_by_great_library']},      
-
-            # If wonder built is NONE of the above
-            {'trigger':'select_card_for_wonder', 'source':'card_for_wonder', 'dest':'post_construction', 'condition':'card_selectable'}
-
-        ## FROM 'post_construction' STATE ###
-
+        'start_phase',
+        State('draft_phase', on_enter='_set_valid_moves'),
+        State('game_phase', on_enter='_set_valid_moves'),
+        State('_turn_end', on_enter='_resolve_turn'),
+        State('game_end', on_enter='_set_victor')
     ]
 
-    def __init__(self, game_id=1, active=False, first_turn_player_index=None, log=False, random_moves = False):
-        # Create a dict with first age cards and card slots:
+    def create_transitions(model):
+        add_t = model.state_machine.add_transition
+
+        add_t('begin_draft_phase', 'start_phase', 'draft_phase')
+
+        add_t('make_move', 'draft_phase', '=', conditions=['is_valid_move'], before=['_draft_wonder','_record_move'], after='begin_game_phase')
+        add_t('begin_game_phase', 'draft_phase', 'game_phase', conditions=['all_wonders_drafted'])
+
+        add_t('make_move', 'game_phase', '_turn_end', conditions=['is_valid_move'], before=['_play_card','_record_move'])
+
+        add_t('continue_game', '_turn_end', 'game_phase', unless=['end_game_triggered'])
+        add_t('finish_game', '_turn_end', 'game_end', conditions=['end_game_triggered'])
+
+    model_config = dict(auto_transitions=False, show_conditions=True, show_state_attributes=True)
+
+    def __init__(self, game_id=1, first_turn_player_index=None, log=False):
         self.rng = default_rng()
-        self.age_boards = {'1':Age(1)}
+        self.state_machine = GraphMachine(self, states=Game.states, initial='start_phase',**Game.model_config)
+        self.create_transitions()
+        self.age_boards = {
+            '1':Age(1),
+            '2':Age(2),
+            '3':Age(3)
+        }
         self.game_id = game_id
-        self.active = active
-        if active is True:
-            self.random_moves = False
-        else:
-            self.random_moves = random_moves
         self.players = [Player(0, 'human'), Player(1, 'human')]
         self.turn_count = 1
         if first_turn_player_index is None:
@@ -327,34 +440,184 @@ class Game:
             # Randomly select first player if none specified.
         self.current_age = 1 # Start in first age.
         self.military_track = 0 # Start military track at 0. Player 0 is -ve direction, player 1 is +ve direction.
+        wonders = list(Game.all_wonders)
+        self.rng.shuffle(wonders)
+        self.first_draft_wonders = wonders[0:4]
+        self.second_draft_wonders = wonders[4:8]
+        self.unavailable_wonders = wonders[8:]
         tokens = list(Game.all_tokens)
         self.rng.shuffle(tokens)
-        self.available_tokens = tokens[0:3] # Choose 3 random tokens.
-        self.unavailable_tokens = tokens[3:] # Store the rest for The Great Library.
-        self.discard_pile = [] # Create a discard pile for The Mausoleum.
+        self.available_tokens = tokens[0:5] # Choose 3 random tokens.
+        self.unavailable_tokens = tokens[5:] # Store the rest for The Great Library.
+        self.discard_pile:list[Card] = [] # Create a discard pile for The Mausoleum.
         self.game_ended = False
+        #TODO remove log and construction log
         self.log = log
         self.construction_log = {}
+        self.move_sequence = []
         self.display_game_state()
+        self.valid_moves:list[Move] = None
 
     def __repr__(self):
         return repr('Game Instance: ' + str(self.game_id))
 
-    def get_slots_in_age(self, age:int=None):
+    def _set_valid_moves(self):
+        match self.state:
+            case 'draft_phase':
+                self.valid_moves = self._get_valid_moves_draft_phase()
+            case 'game_phase':
+                self.valid_moves = self._get_valid_moves_game_phase()
+
+    def _get_valid_moves_draft_phase(self) -> list[Move]:
+        if self.state is not 'draft_phase':
+            return print("Not in the draft phase!")
+        if self.first_draft_wonders:
+            return [Move(Action.DRAFT_WONDER, wonder) for wonder in self.first_draft_wonders]
+        elif self.second_draft_wonders:
+            return [Move(Action.DRAFT_WONDER, wonder) for wonder in self.second_draft_wonders]
+        else:
+            return print("There are no wonders left! Why are we still in the draft phase..?")
+
+    def _get_valid_moves_game_phase(self) -> list[Move]:
+        if self.state is not 'game_phase':
+            return print("Not in the game phase!")
+        turn_player = self.get_player()
+        non_turn_player = self.get_player(False)
+
+        selectable_cards = [slot.card_in_slot for slot in self.get_slots_in_age() if slot.card_selectable]
+        selectable_card_costs = [object_coin_cost(turn_player, non_turn_player, card) for card in selectable_cards]
+        constructable_cards = [c for c in zip(selectable_cards, selectable_card_costs) if c[1] <= turn_player.coins]
+
+        selectable_wonder_costs = [object_coin_cost(turn_player, non_turn_player, wonder) for wonder in turn_player.wonders_in_hand]
+        if len(turn_player.wonders_in_play) + len(non_turn_player.wonders_in_play) < 7:
+            constructable_wonders = [
+                w for w in zip(turn_player.wonders_in_hand, selectable_wonder_costs) if w[1] <= turn_player.coins
+            ]
+        else:
+            constructable_wonders = []
+
+        discard_moves = [Move(Action.DISCARD_CARD, card=card) for card in selectable_cards]
+        construct_moves = [Move(Action.CONSTRUCT_CARD, card=card[0], cost=card[1]) for card in constructable_cards]
+        wonder_moves = []
+
+        for wonder in constructable_wonders:
+            match wonder[0].wonder_effect:
+                case '':
+                    wonder_moves.append(
+                        [
+                            Move(Action.CONSTRUCT_WONDER, wonder[0], card, None, wonder[1]) for card in selectable_cards
+                        ]
+                    )
+                case 'DestroyGrey':
+                    destroyable_cards = [card for card in self.get_player(False).cards_in_play if card.colour == 'Grey']
+                    wonder_moves.append(
+                        [
+                            Move(Action.CONSTRUCT_WONDER, wonder[0], card, special, wonder[1])
+                            for card in selectable_cards
+                            for special in destroyable_cards
+                        ]
+                    )
+                case 'DestroyBrown':
+                    destroyable_cards = [card for card in self.get_player(False).cards_in_play if card.colour == 'Brown']
+                    wonder_moves.append(
+                        [
+                            Move(Action.CONSTRUCT_WONDER, wonder[0], card, special, wonder[1])
+                            for card in selectable_cards
+                            for special in destroyable_cards
+                        ]
+                    )
+                case 'GainToken':
+                    wonder_moves.append(
+                        [
+                            Move(Action.CONSTRUCT_WONDER, wonder[0], card, special, wonder[1])
+                            for card in selectable_cards
+                            for special in self.unavailable_tokens
+                        ]
+                    )
+                case 'ReviveCard':
+                    wonder_moves.append(
+                        [
+                            Move(Action.CONSTRUCT_WONDER, wonder[0], card, special, wonder[1])
+                            for card in selectable_cards
+                            for special in self.discard_pile
+                        ]
+                    )
+
+        return discard_moves + construct_moves + wonder_moves
+
+    def is_valid_move(self, move:Move) -> bool:
+        if self.valid_moves is None:
+            self._set_valid_moves()
+        if move in self.valid_moves:
+            return True
+        else:
+            return False
+
+    def _draft_wonder(self, move:Move):
+        '''Draft a wonder for the turn player'''
+        if self.first_draft_wonders:
+            wonder_choices = self.first_draft_wonders
+        elif self.second_draft_wonders:
+            wonder_choices = self.second_draft_wonders
+        else:
+            print("No wonders to draft. Not sure how we got here..")
+            return
+
+        self.get_player().wonders_in_hand.append(move.wonder)
+        wonder_choices.remove(move.wonder)
+        self._record_move(move)
+        if len(wonder_choices) in [1,4]:
+            self.change_turn_player()
+        return
+
+    def _play_card(self, move:Move):
+        match move.action:
+            case Action.DISCARD_CARD:
+                self._discard_card(move)
+            case Action.CONSTRUCT_CARD:
+                self._construct_card(move)
+            case Action.CONSTRUCT_WONDER:
+                self._construct_wonder(move)
+            case Action.DRAFT_WONDER:
+                print("Not a valid action for this phase!")
+                return
+        self._record_move()
+        return        
+
+    def _record_move(self, move:Move):
+        self.move_sequence.append(move)
+        return
+
+    def _discard_card(self, move:Move):
+        yellow_card_count = len([c for c in self.get_player(True).cards_in_play if c.colour == 'Yellow'])
+        self.get_player(True).coins += 2 + yellow_card_count
+        self.discard_pile.append(move.card)
+        for slot in self.get_slots_in_age():
+            if slot.card_in_slot == move.card:
+                slot.card_in_slot = None
+        return
+    
+    def _construct_card(self, move:Move):
+
+        return
+
+    def _construct_wonder(self, move:Move):
+        return
+
+    def get_slots_in_age(self, age:int=None) -> list[CardSlot]:
         '''Returns list of CardSlot objects in age. If no age provided, returns list of CardSlots in current age'''
         if age is None:
             age = self.current_age
 
         return self.age_boards[str(age)].card_slots
 
-    def get_player(self, turn_player:str = 'turn'):
+    def get_player(self, is_turn_player:bool = True) -> Player:
         '''Returns current turn/non-turn player object'''
-        if turn_player == 'turn':
+        if is_turn_player:
             return self.players[self.turn_player_index]
-        if turn_player == 'non_turn':
+        if not is_turn_player:
             return self.players[self.turn_player_index ^ 1]
 
-        return print("Please choose 'turn' or 'non_turn' as turn_player argument!")
 
     # TODO: Draft wonders function
     def request_player_input(self, display=True):
@@ -411,7 +674,7 @@ class Game:
         # Discard or construct chosen card and remove card from board
         match action: # TODO add select Wonder option
             case 'c':  # Add card to board.
-                cost = object_coin_cost(self.get_player('turn'), self.get_player('non_turn'), chosen_card)
+                cost = object_coin_cost(self.get_player(True), self.get_player(False), chosen_card)
 
                 # Log for debugging cost calculation function.
                 if self.log is True:
@@ -420,27 +683,27 @@ class Game:
                         'card colour':chosen_card.colour,
                         'card cost':chosen_card.costs,
                         'cost':cost,
-                        'turn_player_gb':self.get_player('turn').grey_brown_resources.copy(),
-                        'turn_player_w':self.get_player('turn').wonder_resources.copy(),
-                        'turn_player_y':self.get_player('turn').yellow_resources.copy(),
-                        'opp_player_gb':self.get_player('non_turn').grey_brown_resources.copy(),
-                        'turn_player_tokens':self.get_player('turn').tokens_in_play.copy(),
-                        'opp_player_tokens':self.get_player('non_turn').tokens_in_play.copy()
+                        'turn_player_gb':self.get_player(True).grey_brown_resources.copy(),
+                        'turn_player_w':self.get_player(True).wonder_resources.copy(),
+                        'turn_player_y':self.get_player(True).yellow_resources.copy(),
+                        'opp_player_gb':self.get_player(False).grey_brown_resources.copy(),
+                        'turn_player_tokens':self.get_player(True).tokens_in_play.copy(),
+                        'opp_player_tokens':self.get_player(False).tokens_in_play.copy()
                     }
 
-                if cost <= self.get_player('turn').coins:
-                    self.get_player('turn').coins += - cost
+                if cost <= self.get_player(True).coins:
+                    self.get_player(True).coins += - cost
                     print(f"Player {self.turn_player_index+1} paid {cost} coins.")
                     # Account for Economy token.
-                    if cost > 0 and 'Economy' in [t.name for t in self.get_player('non_turn').tokens_in_play]:
-                        self.get_player('non_turn').coins += cost - chosen_card.costs['$']
+                    if cost > 0 and 'Economy' in [t.name for t in self.get_player(False).tokens_in_play]:
+                        self.get_player(False).coins += cost - chosen_card.costs['$']
                     self.construct_card(chosen_card)
                 else:
                     print('You do not have the resources/coins required to construct this card!')
                     return
             case 'd':  # Gain coins based on yellow buildings owned.
-                yellow_card_count = len([c for c in self.get_player('turn').cards_in_play if c.colour == 'Yellow'])
-                self.get_player('turn').coins += 2 + yellow_card_count
+                yellow_card_count = len([c for c in self.get_player(True).cards_in_play if c.colour == 'Yellow'])
+                self.get_player(True).coins += 2 + yellow_card_count
                 self.discard_pile.append(chosen_card)
             case _:
                 print('This is not a valid action!')
@@ -519,21 +782,21 @@ class Game:
 
     def display_game_state(self):
         '''Print a visual representation of the current game state.'''
-
-        print("\n-------- \n"+
-              f"Turn #{self.turn_count}\n"+
-              "--------")
-        self.age_boards[str(self.current_age)].display_board()
-        print("\nPlayer 1 >" + repr(self.players[0]) +
-            "\n\nPlayer 2 >" + repr(self.players[1]) +
-            "\n\nCurrent turn player is Player " + str(self.turn_player_index + 1)
-            + "\n"
-        )
-
-    def get_valid_moves(self) -> list[str]:
-        '''Returns list of valid moves for given board state and player states.'''
-        # TODO Return list of valid moves for current player using below functions.
-        return
+        match self.state:
+            case 'start_phase':
+                print("Welcome to a new game! Call your_game_object.begin_draft_phase to start!")
+            case 'draft_phase':
+                print()
+            case 'game_phase': 
+                print("\n-------- \n"+
+                    f"Turn #{self.turn_count}\n"+
+                    "--------")
+                self.age_boards[str(self.current_age)].display_board()
+                print("\nPlayer 1 >" + repr(self.players[0]) +
+                    "\n\nPlayer 2 >" + repr(self.players[1]) +
+                    "\n\nCurrent turn player is Player " + str(self.turn_player_index + 1)
+                    + "\n"
+                )
 
     def construct_card(self, card:Card, player:Player = None, opponent:Player = None):
         '''Function to construct a card in turn players tableau'''
@@ -667,119 +930,6 @@ class Game:
             self.game_ended = True
 
 
-class CardSlot:
-    '''Define a card slot on board to represent selectability, visibility, etc.'''
-    # TODO covered_by doesnt work when covered by 0 only (age 2 pos 2, age 3 pos 2).
-    # TODO Changed .csv to "0" instead of 0 to fix above, but would like to fix here.
-    def __init__(self, card_in_slot=None, card_board_position=None, game_age=None,
-                 card_visible=1, card_selectable=0, covered_by=None, row=None):
-        self.card_board_position = card_board_position
-        self.game_age = game_age
-        self.card_in_slot = card_in_slot
-        self.card_visible = card_visible
-        self.card_selectable = card_selectable
-        if covered_by:
-            self.covered_by = [int(card) for card in str(covered_by).split(" ")]
-        else:
-            self.covered_by = []
-        self.row = row
-
-    def __repr__(self):  # How the cards in structure are displayed to the players.
-        if self.card_in_slot is None:
-            return str("")
-
-        if self.card_visible == 0:
-            return str("#" + repr(self.card_board_position)
-                       + " Hidden " + repr(self.covered_by)
-                       )
-
-        return str("#" + repr(self.card_board_position) + " "
-                   + repr(self.card_in_slot)
-                   )
-
-
-class Age:
-    '''Class to define a game age and represent the unique board layouts.'''
-
-    all_card_slots = csv_to_class('age_layout.csv', CardSlot)
-
-    ages = [1,2,3]
-    age_card_counts = {
-        '1':{'1':20},
-        '2':{'2':20},
-        '3':{'3':17,'Guild':3}
-    }
-    age_layouts = {}
-
-    for age in ages:
-        age_layout = []
-        for slot in all_card_slots:
-            if slot.game_age == age:
-                age_layout.append(slot)
-        age_layouts[str(age)] = age_layout
-
-    # Generates a dict of lists holding initial card slot details for each age.
-    # Couldn't use nested dict/list comprehension because inner comprehesions cant access outer scope to iterate over,
-    # namely all_card_slots.
-
-    def __init__(self, age):
-        self.rng = default_rng()
-        self.age = age
-        self.card_slots = self.prepare_age_board(age)
-
-    def __repr__(self):
-        return str('Age ' + str(self.age))
-
-    # Init functions:
-
-    def prepare_age_board(self, age):
-        '''Generates a game board for a specified age'''
-        # Randomly select cards from card pool(s) based on age, card type, and quantity specified in age_card_counts.
-        age_cards = [] # Will be a list of card objects selected randomly from all_cards.
-
-        for card_type, count in self.age_card_counts[str(age)].items():
-            card_pool = [card for card in Game.all_cards if str(card.age)==card_type]
-            chosen_cards = list(self.rng.choice(card_pool, size=count, replace=False))
-            age_cards.extend(chosen_cards)
-
-        self.rng.shuffle(age_cards) # Shuffle required when multiple card types are selected (i.e. 3rd Age).
-
-        initial_age_board = self.age_layouts[str(age)] # Selects appropriate list of CardSlot objects for age.
-
-        if len(initial_age_board) != len(age_cards):
-            return print('Number of card slots in chosen age does not match the number of cards selected!')
-
-        # Place card objects into card slots
-        for position, card in enumerate(age_cards):
-            initial_age_board[position].card_in_slot = card
-
-        return initial_age_board
-
-    def update_all_slots(self):
-        '''Updates all slots on board as per update_slot method'''
-        for slot in range(len(self.card_slots)):
-            self.update_slot(slot)  # Update each slot for visibility and selectability.
-
-    def update_slot(self, slot):
-        '''Updates card in a single slot for visibility, selectability, etc.'''
-        if self.card_slots[slot].covered_by:  # Checks whether there are still cards covering this card.
-            # Apparently the pythonic way to check a list is not empty is to see if the list is true... ¯\_(ツ)_/¯
-            for covering_card in self.card_slots[slot].covered_by:  # Loops through list of
-                # covering cards. Does it backwards to avoid index errors.
-                if self.card_slots[covering_card].card_in_slot is None:  # Checks if covering card has been taken.
-                    self.card_slots[slot].covered_by.remove(covering_card)  # If covering card has been taken,
-                    # remove it from list of covering cards.
-
-        if not self.card_slots[slot].covered_by:  # If no more covering cards, make card visible and selectable.
-            self.card_slots[slot].card_selectable = 1
-            self.card_slots[slot].card_visible = 1
-
-    def display_board(self):
-        '''Prints visual representation of cards remaining on the board for this age'''
-        cards = self.card_slots
-        rows = max(self.card_slots[slot].row for slot in range(len(self.card_slots)))
-        for row in reversed(range(int(rows) + 1)):
-            print("Row", str(row + 1), ":", [card for card in cards if int(card.row) == row])
 
 
 def object_coin_cost(player:Player, opponent:Player, obj:Constructable) -> int:

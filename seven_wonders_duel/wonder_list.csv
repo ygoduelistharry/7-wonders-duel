@@ -1,5 +1,5 @@
 name,set,cost_string,passive_string,on_play_string,victory_point_string,wonder_effect,go_again
-The Appian Way,Base,PCCSS,,$$$,,Lose3$,True
+The Appian Way,Base,PCCSS,,$$$xxx,,,True
 Circus Maximus,Base,GWSS,,M,3,DestroyGrey,False
 The Colossus,Base,GCCC,,MM,3,,False
 The Great Library,Base,PGWWW,,,4,GainToken,False
