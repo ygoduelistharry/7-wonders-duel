@@ -1,6 +1,7 @@
 package swd_engine
 
-import linalg "core:math/linalg"
+import q "core:container/queue"
+// import linalg "core:math/linalg"
 import "core:math/rand"
 import "core:slice"
 import "core:time"
@@ -72,6 +73,13 @@ Object_Kind :: enum u8 {
 	Wonder,
 }
 Object_Kind_Count :: [Object_Kind]int
+object_kind_dot_product :: proc(r1, r2: Object_Kind_Count) -> int {
+	sum: int
+	for object in Object_Kind {
+		sum += r1[object] * r2[object]
+	}
+	return sum
+}
 
 Resource :: enum u8 {
 	Clay,
@@ -88,6 +96,18 @@ Resource_Key_Value_Pair :: struct {
 }
 brown_resources: Resources = {.Clay, .Stone, .Wood}
 grey_resources: Resources = {.Glass, .Papyrus}
+resource_dot_product :: proc(r1, r2: Resource_Count) -> int {
+	sum: int
+	for resource in Resource {
+		sum += r1[resource] * r2[resource]
+	}
+	return sum
+}
+
+dot :: proc {
+	resource_dot_product,
+	object_kind_dot_product,
+}
 
 
 Object_Base_Cost :: struct {
@@ -97,9 +117,12 @@ Object_Base_Cost :: struct {
 }
 
 Player_State :: struct {
-	objects_constructed:                [dynamic; 34]Game_Object_Name,
-	wonders_available:                  [dynamic; 4]Game_Object_Name,
+	cards_constructed:                  [dynamic; 30]Object_Name,
+	wonders_constructed:                [dynamic; 4]Object_Name,
+	cards_tucked:                       [dynamic; 4]Object_Name,
+	wonders_available:                  [dynamic; 4]Object_Name,
 	object_kind_count_owned:            Object_Kind_Count,
+	player_id:                          Player_ID,
 	coins:                              int,
 	resource_production:                Resource_Count,
 	resource_trade_price:               Resource_Count,
@@ -107,6 +130,7 @@ Player_State :: struct {
 	variable_grey_resource_production:  int,
 	progress_tokens:                    Progress_Tokens,
 	science_symbols:                    Science_Symbol_Count,
+	unique_science_symbols:             int,
 	linking_symbols:                    Linking_Symbols,
 	fixed_vp:                           int,
 	coin_per_vp:                        int,
@@ -120,32 +144,36 @@ Player_ID :: enum i8 {
 }
 
 Age :: enum u8 {
-	Draft,
-	Age1,
-	Age2,
-	Age3,
+	Draft         = 0,
+	Age1          = 1,
+	Age2          = 2,
+	Age3          = 3,
+	Final_Scoring = 4,
 }
 
-Choice_State :: enum {
-	Construct_Or_Discard,
-	Choose_Card_To_Discard,
-	Choose_Card_To_Tuck_Under_Wonder,
+Choice_State :: enum u16 {
+	Choose_Wonder_To_Draft,
+	Choose_Object_To_Construct_Or_Discard,
 	Choose_Progress_Token,
 	Choose_Unavailable_Progress_Token,
 	Choose_Brown_Card_To_Destroy,
 	Choose_Grey_Card_To_Destroy,
 	Choose_Card_To_Revive,
+	Choose_First_Player,
 }
 
 Game :: struct {
 	boards:                      [Age]Board,
 	player_states:               #sparse[Player_ID]Player_State,
-	cards_discarded:             [dynamic; 60]Game_Object_Name,
-	cards_unavailable:           [dynamic; 13]Game_Object_Name,
-	wonders_available:           [8]Game_Object_Name,
+	move_history:                [dynamic; 256]Move,
+	cards_discarded:             [dynamic; 64]Object_Name,
+	cards_unavailable:           [dynamic; 16]Object_Name,
+	wonders_to_draft:            [8]Object_Name,
+	wonder_ids_draftable:        bit_set[0 ..= 7;u8],
 	rng_state:                   rand.Default_Random_State,
 	rng_seed:                    u64,
 	age:                         Age,
+	objects_left_in_age:         int,
 	turn:                        int,
 	turn_player:                 Player_ID,
 	choice_state:                Choice_State,
@@ -153,7 +181,91 @@ Game :: struct {
 	military_track:              int, //negative means p1 leading
 	military_tokens_available:   Military_Tokens,
 	progress_tokens_available:   Progress_Tokens,
-	progress_tokens_unavailable: Progress_Tokens,
+	progress_tokens_unavailable: [dynamic; 10]Progress_Token,
+	end_of_age_triggered:        bool,
+	completed:                   bool,
+	winner:                      Player_ID,
+}
+create_new_game :: proc(rng_seed: i64 = -1) -> Game {
+	new_game: Game = {}
+
+	if rng_seed < 0 {
+		new_game.rng_seed = u64(time.now()._nsec)} else {
+		new_game.rng_seed = u64(rng_seed)
+	}
+	new_game.rng_state = rand.create_u64(new_game.rng_seed)
+
+	rng := rand.default_random_generator(&new_game.rng_state)
+
+	new_game.turn_player = rand.choice_enum(Player_ID, rng)
+
+	new_game.age = .Draft
+	new_game.objects_left_in_age = 8
+
+	wonders := get_all_wonder_names()
+	rand.shuffle(wonders[:], rng)
+	copy(new_game.wonders_to_draft[:], wonders[:8])
+	new_game.wonder_ids_draftable = {0, 1, 2, 3}
+
+	new_game.boards = default_age_boards
+
+	age1_cards := get_all_age1_card_names()
+	age2_cards := get_all_age2_card_names()
+	age3_non_guild_cards := get_all_age3_non_guild_card_names()
+	guild_cards := get_all_guild_card_names()
+	rand.shuffle(age1_cards[:], rng)
+	rand.shuffle(age2_cards[:], rng)
+	rand.shuffle(age3_non_guild_cards[:], rng)
+	rand.shuffle(guild_cards[:], rng)
+
+	for card, idx in age1_cards[:20] {new_game.boards[.Age1][idx].card_in_slot = card}
+	append(&new_game.cards_unavailable, ..age1_cards[20:])
+
+	for card, idx in age2_cards {new_game.boards[.Age2][idx].card_in_slot = card}
+	append(&new_game.cards_unavailable, ..age2_cards[20:])
+
+	all_selected_age3_cards: [20]Object_Name
+	copy(all_selected_age3_cards[:17], age3_non_guild_cards[:17])
+	append(&new_game.cards_unavailable, ..age3_non_guild_cards[17:])
+	copy(all_selected_age3_cards[17:], guild_cards[:3])
+	append(&new_game.cards_unavailable, ..guild_cards[3:])
+
+	rand.shuffle(all_selected_age3_cards[:])
+	for card, idx in all_selected_age3_cards {new_game.boards[.Age3][idx].card_in_slot = card}
+
+
+	new_game.military_tokens_available = {.P1_2, .P1_5, .P2_2, .P2_5}
+
+
+	progress_tokens: [len(Progress_Token)]Progress_Token
+	for token, idx in Progress_Token {
+		progress_tokens[idx] = token
+	}
+	rand.shuffle(progress_tokens[:], rng)
+	for token, idx in progress_tokens {
+		if idx < 5 {
+			new_game.progress_tokens_available += {token}
+		} else {
+			append(&new_game.progress_tokens_unavailable, token)
+		}
+	}
+
+	new_game.player_states = {
+		.P1 = {
+			coins = 7,
+			resource_trade_price = {.Wood = 2, .Clay = 2, .Stone = 2, .Glass = 2, .Papyrus = 2},
+		},
+		.P2 = {
+			coins = 7,
+			resource_trade_price = {.Wood = 2, .Clay = 2, .Stone = 2, .Glass = 2, .Papyrus = 2},
+		},
+	}
+
+	return new_game
+}
+
+change_turn_player :: proc(game: ^Game) {
+	game.turn_player = Player_ID(-1 * int(game.turn_player))
 }
 
 Object_Real_Cost :: struct {
@@ -161,16 +273,15 @@ Object_Real_Cost :: struct {
 	traded_coin_cost:    int,
 	linking_symbol_used: bool,
 }
-
-game_object_cost_for_player :: proc(
-	object_name: Game_Object_Name,
+calculate_object_cost :: proc(
+	object_name: Object_Name,
 	player_id: Player_ID,
-	game: ^Game,
+	game: Game,
 ) -> Object_Real_Cost {
 
-	object := game_objects_db[object_name]
-	player := &game.player_states[player_id]
-	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
+	object := objects_db[object_name]
+	player := game.player_states[player_id]
+	opponent := game.player_states[Player_ID(-1 * int(player_id))]
 
 	// check for free linking symbol
 	if object.cost.free_construction_symbol in player.linking_symbols {
@@ -208,7 +319,7 @@ game_object_cost_for_player :: proc(
 
 	// if we have no varaible resource production, no need to sort.
 	if variable_brown_res_available + variable_grey_res_available <= 0 {
-		traded_coin_cost := linalg.vector_dot(player.resource_trade_price, extra_res_required)
+		traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
 		return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 	}
 	// if we do, we need to know what the best way to spend "variable" resource production is
@@ -240,103 +351,196 @@ game_object_cost_for_player :: proc(
 			}
 		}
 	}
-	traded_coin_cost := linalg.vector_dot(player.resource_trade_price, extra_res_required)
+	traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
 	return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 }
 
-game_create_new :: proc(rng_seed: i64 = -1) -> Game {
-	new_game: Game = {}
 
-	if rng_seed < 0 {
-		new_game.rng_seed = u64(time.now()._nsec)} else {
-		new_game.rng_seed = u64(rng_seed)
-	}
-	new_game.rng_state = rand.create_u64(new_game.rng_seed)
-
-	rng := rand.default_random_generator(&new_game.rng_state)
-
-	new_game.turn_player = rand.choice_enum(Player_ID, rng)
-
-	new_game.age = .Draft
-
-	wonders := get_all_wonder_names()
-	rand.shuffle(wonders[:], rng)
-	for wonder, idx in wonders {
-		if idx < 8 {new_game.wonders_available[idx] = wonder} else {break}
-	}
-
-	new_game.boards = default_age_boards
-
-	age1_cards := get_all_age1_card_names()
-	age2_cards := get_all_age2_card_names()
-	age3_non_guild_cards := get_all_age3_non_guild_card_names()
-	guild_cards := get_all_guild_card_names()
-	rand.shuffle(age1_cards[:], rng)
-	rand.shuffle(age2_cards[:], rng)
-	rand.shuffle(age3_non_guild_cards[:], rng)
-	rand.shuffle(guild_cards[:], rng)
-	for card, idx in age1_cards {
-		if idx < 20 {new_game.boards[.Age1][idx].game_object_in_slot = card} else {
-			append(&new_game.cards_unavailable, card)
-		}
-	}
-	for card, idx in age2_cards {
-		if idx < 20 {new_game.boards[.Age2][idx].game_object_in_slot = card} else {
-			append(&new_game.cards_unavailable, card)
-		}
-	}
-	for card, idx in age3_non_guild_cards {
-		if idx < 17 {new_game.boards[.Age3][idx].game_object_in_slot = card} else {
-			append(&new_game.cards_unavailable, card)
-		}
-	}
-	for card, idx in guild_cards {
-		if idx < 3 {new_game.boards[.Age3][idx + 17].game_object_in_slot = card} else {
-			append(&new_game.cards_unavailable, card)
-		}
-	}
-
-	new_game.military_tokens_available = {.P1_2, .P1_5, .P2_2, .P2_5}
-
-	progress_tokens: [len(Progress_Token)]Progress_Token
-	for token, idx in Progress_Token {
-		progress_tokens[idx] = token
-	}
-	rand.shuffle(progress_tokens[:], rng)
-	for token, idx in progress_tokens {
-		if idx < 5 {
-			new_game.progress_tokens_available |= {token}
-		} else {
-			new_game.progress_tokens_unavailable |= {token}
-		}
-	}
-
-	new_game.player_states = {
-		.P1 = {
-			coins = 7,
-			resource_trade_price = {.Wood = 2, .Clay = 2, .Stone = 2, .Glass = 2, .Papyrus = 2},
-		},
-		.P2 = {
-			coins = 7,
-			resource_trade_price = {.Wood = 2, .Clay = 2, .Stone = 2, .Glass = 2, .Papyrus = 2},
-		},
-	}
-
-	return new_game
+Draft_Wonder :: struct {
+	wonder_name: Object_Name,
+	wonder_idx:  int,
+}
+Construct_Card :: struct {
+	card_name: Object_Name,
+	slot_idx:  int,
+	cost:      Object_Real_Cost,
+}
+Construct_Wonder :: struct {
+	wonder_name: Object_Name,
+	wonder_idx:  int,
+	cost:        Object_Real_Cost,
+	card_name:   Object_Name,
+	slot_idx:    int,
+}
+Discard_For_Coins :: struct {
+	card_name: Object_Name,
+	slot_idx:  int,
+}
+Select_Progress_Token :: struct {
+	token:     Progress_Token,
+	token_idx: int,
+}
+Select_Card :: struct {
+	card_name: Object_Name,
+	card_idx:  int,
+}
+Select_Player :: struct {
+	chosen_player: Player_ID,
 }
 
-construct_game_object :: proc(object_name: Game_Object_Name, player_id: Player_ID, game: ^Game) {
-	object := game_objects_db[object_name]
+Move_Data :: union {
+	Draft_Wonder,
+	Construct_Card,
+	Construct_Wonder,
+	Discard_For_Coins,
+	Select_Progress_Token,
+	Select_Card,
+	Select_Player,
+}
+
+Move :: struct {
+	move_data:     Move_Data,
+	choice_state:  Choice_State,
+	acting_player: Player_ID,
+}
+
+get_valid_moves :: proc(game: Game) -> [dynamic; 64]Move {
+	if game.completed {return {}}
+	valid_moves: [dynamic; 64]Move
+	turn_player_id := game.turn_player
+	opponent_id := Player_ID(-1 * int(turn_player_id))
+	turn_player := game.player_states[turn_player_id]
+	opponent := game.player_states[opponent_id]
+
+	switch game.choice_state {
+	case .Choose_Wonder_To_Draft:
+		{
+			for idx in game.wonder_ids_draftable {
+				wonder := game.wonders_to_draft[idx]
+				append(&valid_moves, Move{move_data = Draft_Wonder{wonder, idx}})
+			}
+		}
+	case .Choose_Object_To_Construct_Or_Discard:
+		{
+			// get all constructable wonders
+			constructable_wonder_data: [dynamic; 4]Construct_Wonder
+			for wonder, idx in turn_player.wonders_available {
+				wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
+				if wonder_cost.total_coin_cost <= turn_player.coins {
+					append(
+						&constructable_wonder_data,
+						Construct_Wonder {
+							wonder_name = wonder,
+							wonder_idx = idx,
+							cost = wonder_cost,
+						},
+					)
+				}
+			}
+
+			// iterate over cards on the board
+			for slot in game.boards[game.age] {
+				if slot.selectable {
+					// add moves to discard for coins
+					append(
+						&valid_moves,
+						Move{move_data = Discard_For_Coins{slot.card_in_slot, slot.id}},
+					)
+					// add moves to construct wonders
+					for data in constructable_wonder_data {
+						wonder_data: Construct_Wonder = {
+							wonder_name = data.wonder_name,
+							wonder_idx  = data.wonder_idx,
+							cost        = data.cost,
+							card_name   = slot.card_in_slot,
+							slot_idx    = slot.id,
+						}
+						append(&valid_moves, Move{move_data = wonder_data})
+					}
+					// add moves to construct cards
+					card_cost := calculate_object_cost(slot.card_in_slot, turn_player_id, game)
+					if card_cost.total_coin_cost <= turn_player.coins {
+						append(
+							&valid_moves,
+							Move {
+								move_data = Construct_Card{slot.card_in_slot, slot.id, card_cost},
+							},
+						)
+					}
+				}
+			}
+		}
+	case .Choose_Progress_Token:
+		{
+			for token in Progress_Token {
+				if token in game.progress_tokens_available {
+					append(
+						&valid_moves,
+						Move{move_data = Select_Progress_Token{token, int(token)}},
+					)
+				}
+			}
+		}
+	case .Choose_Unavailable_Progress_Token:
+		{
+			for token, idx in game.progress_tokens_unavailable {
+				append(&valid_moves, Move{move_data = Select_Progress_Token{token, idx}})
+				if idx >= 3 {break}
+			}
+		}
+	case .Choose_Brown_Card_To_Destroy:
+		{
+			for card, idx in opponent.cards_constructed {
+				if objects_db[card].kind == .Brown {
+					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+				}
+			}
+		}
+	case .Choose_Grey_Card_To_Destroy:
+		{
+			for card, idx in opponent.cards_constructed {
+				if objects_db[card].kind == .Grey {
+					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+				}
+			}
+		}
+	case .Choose_Card_To_Revive:
+		{
+			for card, idx in game.cards_discarded {
+				append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+			}
+		}
+	case .Choose_First_Player:
+		{
+			append(&valid_moves, Move{move_data = Select_Player{turn_player_id}})
+			append(&valid_moves, Move{move_data = Select_Player{opponent_id}})
+		}
+	}
+
+	for &move in valid_moves {
+		move.choice_state = game.choice_state
+		move.acting_player = turn_player_id
+	}
+	return valid_moves
+}
+
+
+// Constructs an object and performs all immediate deterministic actions possible, for example;
+// coin gain/loss, sets choice state to visit next, resolves military track tokens, etc.
+construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^Game) {
+	object := objects_db[object_name]
 	player := &game.player_states[player_id]
 	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
 
-	append(&player.objects_constructed, object_name)
+	if object.kind == .Wonder {
+		append(&player.wonders_constructed, object_name)
+
+	} else {
+		append(&player.cards_constructed, object_name)
+	}
 	player.object_kind_count_owned[object.kind] += 1
 
-	coin_gain := linalg.vector_dot(
-		object.coins_per_object_produced,
-		player.object_kind_count_owned,
-	)
+	coin_gain := dot(object.coins_per_object_produced, player.object_kind_count_owned)
 	coin_gain += object.coins_produced
 	if .Urbanism in player.progress_tokens &&
 	   object.cost.free_construction_symbol in player.linking_symbols {
@@ -376,28 +580,65 @@ construct_game_object :: proc(object_name: Game_Object_Name, player_id: Player_I
 		}
 	}
 
+	// check for military events
 	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {opponent.coins -= 2}
 	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {opponent.coins -= 5}
 	if game.military_track >= 3 && .P1_2 in game.military_tokens_available {opponent.coins -= 2}
 	if game.military_track >= 6 && .P1_5 in game.military_tokens_available {opponent.coins -= 5}
-
-	if object.go_again || (.Theology in player.progress_tokens && object.kind == .Wonder) {
-		game.go_again_active = true
+	if game.military_track <= -9 {
+		game.completed = true
+		game.winner = .P1
+		return
 	}
+	if game.military_track >= 9 {
+		game.completed = true
+		game.winner = .P2
+		return
+	}
+
 
 	// Check for Science
 	player.science_symbols[object.science_symbol_produced] += 1
+	if player.science_symbols[object.science_symbol_produced] == 1 {
+		player.unique_science_symbols += 1
+		if player.unique_science_symbols >= 6 {
+			game.completed = true
+			game.winner = player_id
+		}
+	}
 	if player.science_symbols[object.science_symbol_produced] == 2 {
 		game.choice_state = .Choose_Progress_Token
 	}
 
 	// Wonder specific effects
+	if object.go_again || (.Theology in player.progress_tokens && object.kind == .Wonder) {
+		game.go_again_active = true
+	}
 	if object.gain_unavailable_progress_token {game.choice_state = .Choose_Unavailable_Progress_Token}
 	if object.destroy_brown_card {game.choice_state = .Choose_Brown_Card_To_Destroy}
 	if object.destroy_grey_card {game.choice_state = .Choose_Grey_Card_To_Destroy}
 	if object.revive_card {game.choice_state = .Choose_Card_To_Revive}
 }
 
+// Returns the card removed from the slot (will be .None if slot was empty)
+remove_card_from_board :: proc(slot: ^Board_Slot, game: ^Game) -> Object_Name {
+	board: ^Board = &game.boards[slot.age]
+	card_removed := slot.card_in_slot
+	if card_removed != {} {
+		slot.card_in_slot = {}
+		game.objects_left_in_age -= 1
+		slot.selectable = false
+		for covered_id in slot.covers {
+			board[covered_id].covered_by_count -= 1
+			if board[covered_id].covered_by_count <= 0 {
+				board[covered_id].selectable = true
+				board[covered_id].visible = true
+			}
+		}
+	}
+	if game.objects_left_in_age <= 0 {game.end_of_age_triggered = true}
+	return card_removed
+}
 
 gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^Game) {
 	player := &game.player_states[player_id]
@@ -413,7 +654,13 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	case .Economy:
 		{}
 	case .Law:
-		{player.science_symbols[.Scales] += 1}
+		{player.science_symbols[.Scales] += 1
+			player.unique_science_symbols += 1
+			if player.unique_science_symbols >= 6 {
+				game.completed = true
+				game.winner = player_id
+			}
+		}
 	case .Masonry:
 		{}
 	case .Mathematics:
@@ -426,5 +673,126 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 		{}
 	case .Urbanism:
 		{player.coins += 6}
+	}
+}
+
+
+// Executes a move and progresses the game state --
+// Note! This function doesn't check if the move is valid first!
+// Make sure 'move' is selected from array generated by get_valid_moves() procedure!
+execute_move_unsafe :: proc(move: Move, game: ^Game) {
+	board := &game.boards[game.age]
+	player := &game.player_states[move.acting_player]
+	opponent := &game.player_states[Player_ID(-1 * int(move.acting_player))]
+
+	// the most common next state is constructing an object or discarding for coins.
+	// the switch statement will set the next state differently if appropriate.
+	// the Move struct stores the choice_state when the move was made if it's needed
+	game.choice_state = .Choose_Object_To_Construct_Or_Discard
+
+	switch move_data in move.move_data {
+	case Draft_Wonder:
+		{
+			append(&player.wonders_available, move_data.wonder_name)
+			game.wonder_ids_draftable -= {move_data.wonder_idx}
+			// we do a snake draft, so players double pick when there are 6 and 2 wonders left
+			wonders_left := &game.objects_left_in_age
+			wonders_left^ -= 1
+			if wonders_left^ != 6 || wonders_left^ != 2 {
+				change_turn_player(game)
+			}
+			// reveal the next 4 wonders to draft if necessary
+			if wonders_left^ == 4 {
+				game.wonder_ids_draftable += {4, 5, 6, 7}
+			}
+			if game.objects_left_in_age <= 0 {
+				game.end_of_age_triggered = true
+			} else {
+				game.choice_state = .Choose_Wonder_To_Draft
+			}
+		}
+	case Construct_Card:
+		{
+			player.coins -= move_data.cost.total_coin_cost
+			if .Economy in opponent.progress_tokens {
+				opponent.coins += move_data.cost.traded_coin_cost
+			}
+			slot := &board[move_data.slot_idx]
+			card_to_construct := remove_card_from_board(slot, game)
+			construct_object(card_to_construct, move.acting_player, game)
+		}
+	case Construct_Wonder:
+		{
+			player.coins -= move_data.cost.total_coin_cost
+			if .Economy in opponent.progress_tokens {
+				opponent.coins += move_data.cost.traded_coin_cost
+			}
+			slot := &board[move_data.slot_idx]
+			card_to_tuck := remove_card_from_board(slot, game)
+			unordered_remove(&player.wonders_available, move_data.wonder_idx)
+			construct_object(move_data.wonder_name, move.acting_player, game)
+			append(&player.cards_tucked, card_to_tuck)
+		}
+	case Discard_For_Coins:
+		{
+			slot := &board[move_data.slot_idx]
+			card_to_discard := remove_card_from_board(slot, game)
+			player.coins += 3 + player.object_kind_count_owned[.Yellow]
+			append(&game.cards_discarded, card_to_discard)
+		}
+	case Select_Progress_Token:
+		{
+			gain_progress_token(move_data.token, move.acting_player, game)
+			if move.choice_state == .Choose_Progress_Token {
+				game.progress_tokens_available -= {move_data.token}
+			}
+			if move.choice_state == .Choose_Unavailable_Progress_Token {
+				unordered_remove(&game.progress_tokens_unavailable, move_data.token_idx)
+			}
+		}
+	case Select_Card:
+		{
+			if move.choice_state == .Choose_Card_To_Revive {
+				unordered_remove(&game.cards_discarded, move_data.card_idx)
+				construct_object(move_data.card_name, move.acting_player, game)
+			}
+			if move.choice_state == .Choose_Brown_Card_To_Destroy ||
+			   move.choice_state == .Choose_Grey_Card_To_Destroy {
+				unordered_remove(&opponent.cards_constructed, move_data.card_idx)
+				append(&game.cards_discarded, move_data.card_name)
+				card_data := objects_db[move_data.card_name]
+				opponent.object_kind_count_owned[card_data.kind] -= 1
+				opponent.resource_production -= card_data.resources_produced
+			}
+		}
+	case Select_Player:
+		{
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			if move.choice_state == .Choose_First_Player {
+				game.turn_player = move_data.chosen_player
+			}
+		}
+	}
+
+	if game.end_of_age_triggered {
+		game.go_again_active = false
+		game.age = Age(int(game.age) + 1)
+		if game.age != .Final_Scoring {
+			game.objects_left_in_age = 20
+			// we have a set first player in act 1,
+			// and it should be correct already
+			if game.age != .Age1 {
+				if game.military_track > 0 {game.turn_player = .P1}
+				if game.military_track < 0 {game.turn_player = .P2}
+				if game.military_track == 0 {
+					//TODO tiebreak military
+				}
+				game.choice_state = .Choose_First_Player
+			}
+		} else {
+			game.completed = true
+			//TODO check_victory_points()
+			//game.winner = whoever
+		}
 	}
 }

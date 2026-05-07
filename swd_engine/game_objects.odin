@@ -1,6 +1,6 @@
 package swd_engine
 
-Game_Object :: struct {
+Object :: struct {
 	age:                              Age,
 	kind:                             Object_Kind,
 	cost:                             Object_Base_Cost,
@@ -26,7 +26,7 @@ Game_Object :: struct {
 	gain_unavailable_progress_token:  bool,
 }
 
-Game_Object_Name :: enum {
+Object_Name :: enum {
 	None,
 	Lumber_Yard,
 	Logging_Camp,
@@ -115,7 +115,7 @@ Game_Object_Name :: enum {
 	The_Colossus,
 }
 
-game_objects_db: [Game_Object_Name]Game_Object = {
+objects_db: [Object_Name]Object = {
 	.None = {},
 	.Lumber_Yard = {age = .Age1, kind = .Brown, resources_produced = #partial{.Wood = 1}},
 	.Logging_Camp = {
@@ -659,12 +659,12 @@ game_objects_db: [Game_Object_Name]Game_Object = {
 	},
 }
 
-get_all_age1_card_names :: proc() -> [23]Game_Object_Name {
-	names: [23]Game_Object_Name
+get_all_age1_card_names :: proc() -> [23]Object_Name {
+	names: [23]Object_Name
 	idx: int = 0
-	for card in Game_Object_Name {
+	for card in Object_Name {
 		if (idx >= 23) {return names}
-		if (game_objects_db[card].age == .Age1) {
+		if (objects_db[card].age == .Age1) {
 			names[idx] = card
 			idx += 1
 		}
@@ -672,12 +672,12 @@ get_all_age1_card_names :: proc() -> [23]Game_Object_Name {
 	return names
 }
 
-get_all_age2_card_names :: proc() -> [23]Game_Object_Name {
-	names: [23]Game_Object_Name
+get_all_age2_card_names :: proc() -> [23]Object_Name {
+	names: [23]Object_Name
 	idx: int = 0
-	for card in Game_Object_Name {
+	for card in Object_Name {
 		if (idx >= 23) {return names}
-		if (game_objects_db[card].age == .Age2) {
+		if (objects_db[card].age == .Age2) {
 			names[idx] = card
 			idx += 1
 		}
@@ -685,12 +685,12 @@ get_all_age2_card_names :: proc() -> [23]Game_Object_Name {
 	return names
 }
 
-get_all_age3_non_guild_card_names :: proc() -> [20]Game_Object_Name {
-	names: [20]Game_Object_Name
+get_all_age3_non_guild_card_names :: proc() -> [20]Object_Name {
+	names: [20]Object_Name
 	idx: int = 0
-	for card in Game_Object_Name {
+	for card in Object_Name {
 		if (idx >= 20) {return names}
-		if (game_objects_db[card].age == .Age3) {
+		if (objects_db[card].age == .Age3) {
 			names[idx] = card
 			idx += 1
 		}
@@ -698,12 +698,12 @@ get_all_age3_non_guild_card_names :: proc() -> [20]Game_Object_Name {
 	return names
 }
 
-get_all_guild_card_names :: proc() -> [7]Game_Object_Name {
-	names: [7]Game_Object_Name
+get_all_guild_card_names :: proc() -> [7]Object_Name {
+	names: [7]Object_Name
 	idx: int = 0
-	for card in Game_Object_Name {
+	for card in Object_Name {
 		if (idx >= 7) {return names}
-		if (game_objects_db[card].kind == .Purple) {
+		if (objects_db[card].kind == .Purple) {
 			names[idx] = card
 			idx += 1
 		}
@@ -711,12 +711,12 @@ get_all_guild_card_names :: proc() -> [7]Game_Object_Name {
 	return names
 }
 
-get_all_wonder_names :: proc() -> [12]Game_Object_Name {
-	names: [12]Game_Object_Name
+get_all_wonder_names :: proc() -> [12]Object_Name {
+	names: [12]Object_Name
 	idx: int = 0
-	for card in Game_Object_Name {
+	for card in Object_Name {
 		if (idx >= 12) {return names}
-		if (game_objects_db[card].kind == .Wonder) {
+		if (objects_db[card].kind == .Wonder) {
 			names[idx] = card
 			idx += 1
 		}

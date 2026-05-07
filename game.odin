@@ -28,6 +28,6 @@ main :: proc() {
 		}
 	}
 
-	game := engine.game_create_new()
-	fmt.printf("Size of Game_Object: %v", size_of(engine.Game_Object))
+	game := engine.create_new_game()
+	fmt.printf("Size of Game_Object: %v", size_of(engine.Object))
 }
