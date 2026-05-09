@@ -716,7 +716,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	switch token {
 	case .Agriculture:
 		{
-			player.fixed_vp_from_blue += 4
+			player.fixed_vp_from_other += 4
 			player.coins += 6
 		}
 	case .Architechture:
@@ -736,7 +736,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	case .Mathematics:
 		{}
 	case .Philosophy:
-		{player.fixed_vp_from_blue += 7}
+		{player.fixed_vp_from_other += 7}
 	case .Strategy:
 		{}
 	case .Theology:
