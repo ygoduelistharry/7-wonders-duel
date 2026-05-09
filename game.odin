@@ -28,6 +28,9 @@ main :: proc() {
 		}
 	}
 
-	game := engine.create_new_game()
+	game := engine.create_new_game(rng_seed = 1778252334733313400)
+	get_valid_moves := engine.get_valid_moves
+	blank_object_name: engine.Object_Name
+	blank_object: engine.Object
 	fmt.printf("Size of Game_Object: %v", size_of(engine.Object))
 }

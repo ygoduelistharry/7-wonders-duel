@@ -9,3 +9,4 @@ seven_wonders_duel/swd_fsm.py
 # new odin ignores
 build/
 *.exe
+*.pdb

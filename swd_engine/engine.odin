@@ -1,14 +1,14 @@
 package swd_engine
 
 import q "core:container/queue"
+import "core:math/bits"
 // import linalg "core:math/linalg"
 import "core:math/rand"
 import "core:slice"
 import "core:time"
 
 Science_Symbol :: enum u8 {
-	None,
-	Astrolabe,
+	Astrolabe = 1,
 	Scales,
 	Sundial,
 	Mortar_And_Pestle,
@@ -19,7 +19,7 @@ Science_Symbol :: enum u8 {
 Science_Symbol_Count :: [Science_Symbol]int
 
 Progress_Token :: enum u16 {
-	Agriculture,
+	Agriculture = 1,
 	Architechture,
 	Economy,
 	Law,
@@ -33,8 +33,7 @@ Progress_Token :: enum u16 {
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
 
 Linking_Symbol :: enum u32 {
-	None,
-	Stable,
+	Stable = 1,
 	Garrison,
 	Palisade,
 	Archery_Range,
@@ -55,7 +54,7 @@ Linking_Symbol :: enum u32 {
 Linking_Symbols :: distinct bit_set[Linking_Symbol;u32]
 
 Military_Token :: enum u8 {
-	P1_2,
+	P1_2 = 1,
 	P1_5,
 	P2_2,
 	P2_5,
@@ -63,7 +62,7 @@ Military_Token :: enum u8 {
 Military_Tokens :: distinct bit_set[Military_Token;u8]
 
 Object_Kind :: enum u8 {
-	Brown,
+	Brown = 1,
 	Grey,
 	Yellow,
 	Green,
@@ -81,8 +80,19 @@ object_kind_dot_product :: proc(r1, r2: Object_Kind_Count) -> int {
 	return sum
 }
 
+Guild :: enum u8 {
+	Builders_Guild = 1,
+	Moneylenders_Guild,
+	Scientists_Guild,
+	Shipowners_Guild,
+	Merchants_Guild,
+	Magistrates_Guild,
+	Tacticians_Guild,
+}
+Guilds :: distinct bit_set[Guild;u8]
+
 Resource :: enum u8 {
-	Clay,
+	Clay = 1,
 	Stone,
 	Wood,
 	Glass,
@@ -133,22 +143,21 @@ Player_State :: struct {
 	unique_science_symbols:             int,
 	linking_symbols:                    Linking_Symbols,
 	fixed_vp:                           int,
-	coin_per_vp:                        int,
-	vp_per_object_kind:                 Object_Kind_Count,
-	vp_per_progress_token:              int,
+	guilds_built:                       Guilds,
 }
 
 Player_ID :: enum i8 {
 	P1 = -1,
 	P2 = 1,
 }
+other_player_id :: proc(player_id: Player_ID) -> Player_ID {return Player_ID(-1 * int(player_id))}
 
 Age :: enum u8 {
-	Draft         = 0,
-	Age1          = 1,
-	Age2          = 2,
-	Age3          = 3,
-	Final_Scoring = 4,
+	Draft = 1,
+	Age1,
+	Age2,
+	Age3,
+	Final_Scoring,
 }
 
 Choice_State :: enum u16 {
@@ -174,9 +183,9 @@ Game :: struct {
 	rng_seed:                    u64,
 	age:                         Age,
 	objects_left_in_age:         int,
-	turn:                        int,
 	turn_player:                 Player_ID,
 	choice_state:                Choice_State,
+	next_choice_state:           Choice_State,
 	go_again_active:             bool,
 	military_track:              int, //negative means p1 leading
 	military_tokens_available:   Military_Tokens,
@@ -221,7 +230,7 @@ create_new_game :: proc(rng_seed: i64 = -1) -> Game {
 	for card, idx in age1_cards[:20] {new_game.boards[.Age1][idx].card_in_slot = card}
 	append(&new_game.cards_unavailable, ..age1_cards[20:])
 
-	for card, idx in age2_cards {new_game.boards[.Age2][idx].card_in_slot = card}
+	for card, idx in age2_cards[:20] {new_game.boards[.Age2][idx].card_in_slot = card}
 	append(&new_game.cards_unavailable, ..age2_cards[20:])
 
 	all_selected_age3_cards: [20]Object_Name
@@ -524,6 +533,61 @@ get_valid_moves :: proc(game: Game) -> [dynamic; 64]Move {
 	return valid_moves
 }
 
+get_guild_value :: proc(guild: Guild, player_id: Player_ID, game: Game) -> (vp: int, coin: int) {
+	player := game.player_states[player_id]
+	opponent := game.player_states[other_player_id(player_id)]
+	player_obj_count := player.object_kind_count_owned
+	opponent_obj_count := opponent.object_kind_count_owned
+	switch guild {
+	case .Builders_Guild:
+		{
+			mult := max(len(player.wonders_constructed), len(opponent.wonders_constructed))
+			vp = 2 * mult
+		}
+	case .Moneylenders_Guild:
+		{
+			mult := max(player.coins, opponent.coins)
+			vp = mult / 3
+		}
+	case .Scientists_Guild:
+		{
+			mult := max(player_obj_count[.Green], opponent_obj_count[.Green])
+			vp = mult
+			coin = mult
+		}
+	case .Merchants_Guild:
+		{
+			mult := max(player_obj_count[.Yellow], opponent_obj_count[.Yellow])
+			vp = mult
+			coin = mult
+		}
+	case .Magistrates_Guild:
+		{
+			mult := max(player_obj_count[.Blue], opponent_obj_count[.Blue])
+			vp = mult
+			coin = mult
+
+		}
+	case .Tacticians_Guild:
+		{
+			mult := max(player_obj_count[.Red], opponent_obj_count[.Red])
+			vp = mult
+			coin = mult
+
+		}
+	case .Shipowners_Guild:
+		{
+			mult := max(
+				player_obj_count[.Grey] + player_obj_count[.Brown],
+				opponent_obj_count[.Grey] + opponent_obj_count[.Brown],
+			)
+			vp = mult
+			coin = mult
+		}
+	}
+	return vp, coin
+}
+
 
 // Constructs an object and performs all immediate deterministic actions possible, for example;
 // coin gain/loss, sets choice state to visit next, resolves military track tokens, etc.
@@ -540,12 +604,18 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	}
 	player.object_kind_count_owned[object.kind] += 1
 
-	coin_gain := dot(object.coins_per_object_produced, player.object_kind_count_owned)
-	coin_gain += object.coins_produced
+	coin_gain :=
+		object.coins_produced +
+		dot(object.coins_per_object_produced, player.object_kind_count_owned)
 	if .Urbanism in player.progress_tokens &&
 	   object.cost.free_construction_symbol in player.linking_symbols {
 		coin_gain += 4
 	}
+	if object.kind == .Purple {
+		_, coin_from_guild := get_guild_value(object.guild, player_id, game^)
+		coin_gain += coin_from_guild
+	}
+
 	player.coins += coin_gain
 
 	player.resource_production += object.resources_produced
@@ -557,21 +627,16 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		}
 	}
 
-	if object.fixed_cost_resource_produced != {} {
-		for &value, resource in player.resource_trade_price {
-			if resource in object.fixed_cost_resource_produced {value = 1}
-		}
+	for &value, resource in player.resource_trade_price {
+		if resource in object.fixed_cost_resource_produced {value = 1}
 	}
+
 	player.variable_brown_resource_production += object.variable_brown_resource_produced
 	player.variable_grey_resource_production += object.variable_grey_resource_produced
 
 	player.fixed_vp += object.vp_produced
 
-	player.vp_per_object_kind += object.vp_per_object_kind
-	player.coin_per_vp += object.coin_per_vp
-
 	player.linking_symbols |= {object.linking_symbol_produced}
-	opponent.coins -= object.coins_destroyed
 
 	if object.kind == .Red {
 		game.military_track += int(player_id) * object.military_produced
@@ -580,11 +645,15 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		}
 	}
 
-	// check for military events
-	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {opponent.coins -= 2}
-	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {opponent.coins -= 5}
-	if game.military_track >= 3 && .P1_2 in game.military_tokens_available {opponent.coins -= 2}
-	if game.military_track >= 6 && .P1_5 in game.military_tokens_available {opponent.coins -= 5}
+	// destroy opponent coins
+	coin_loss := object.coins_destroyed
+	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {coin_loss += 2}
+	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {coin_loss += 5}
+	if game.military_track >= 3 && .P1_2 in game.military_tokens_available {coin_loss += 2}
+	if game.military_track >= 6 && .P1_5 in game.military_tokens_available {coin_loss += 5}
+	opponent.coins = max(0, opponent.coins - coin_loss)
+
+	// check for military victory
 	if game.military_track <= -9 {
 		game.completed = true
 		game.winner = .P1
@@ -597,27 +666,28 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	}
 
 
-	// Check for Science
+	// Check for science events
 	player.science_symbols[object.science_symbol_produced] += 1
 	if player.science_symbols[object.science_symbol_produced] == 1 {
 		player.unique_science_symbols += 1
 		if player.unique_science_symbols >= 6 {
 			game.completed = true
 			game.winner = player_id
+			return
 		}
 	}
 	if player.science_symbols[object.science_symbol_produced] == 2 {
-		game.choice_state = .Choose_Progress_Token
+		game.next_choice_state = .Choose_Progress_Token
 	}
 
 	// Wonder specific effects
 	if object.go_again || (.Theology in player.progress_tokens && object.kind == .Wonder) {
 		game.go_again_active = true
 	}
-	if object.gain_unavailable_progress_token {game.choice_state = .Choose_Unavailable_Progress_Token}
-	if object.destroy_brown_card {game.choice_state = .Choose_Brown_Card_To_Destroy}
-	if object.destroy_grey_card {game.choice_state = .Choose_Grey_Card_To_Destroy}
-	if object.revive_card {game.choice_state = .Choose_Card_To_Revive}
+	if object.gain_unavailable_progress_token {game.next_choice_state = .Choose_Unavailable_Progress_Token}
+	if object.destroy_brown_card {game.next_choice_state = .Choose_Brown_Card_To_Destroy}
+	if object.destroy_grey_card {game.next_choice_state = .Choose_Grey_Card_To_Destroy}
+	if object.revive_card {game.next_choice_state = .Choose_Card_To_Revive}
 }
 
 // Returns the card removed from the slot (will be .None if slot was empty)
@@ -664,7 +734,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	case .Masonry:
 		{}
 	case .Mathematics:
-		{player.vp_per_progress_token += 3}
+		{}
 	case .Philosophy:
 		{player.fixed_vp += 7}
 	case .Strategy:
@@ -674,6 +744,25 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	case .Urbanism:
 		{player.coins += 6}
 	}
+}
+
+calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> int {
+	player := game.player_states[player_id]
+	opponent := game.player_states[other_player_id(player_id)]
+
+	vp := player.fixed_vp + player.coins / 3
+
+	if .Mathematics in player.progress_tokens {
+		vp += int(bits.count_ones(transmute(u16)player.progress_tokens))
+	}
+
+	player_obj_count := player.object_kind_count_owned
+	opponent_obj_count := opponent.object_kind_count_owned
+	for guild in player.guilds_built {
+		vp_gain, _ := get_guild_value(guild, player_id, game)
+		vp += vp_gain
+	}
+	return vp
 }
 
 
@@ -688,7 +777,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	// the most common next state is constructing an object or discarding for coins.
 	// the switch statement will set the next state differently if appropriate.
 	// the Move struct stores the choice_state when the move was made if it's needed
-	game.choice_state = .Choose_Object_To_Construct_Or_Discard
+	game.next_choice_state = .Choose_Object_To_Construct_Or_Discard
 
 	switch move_data in move.move_data {
 	case Draft_Wonder:
@@ -708,7 +797,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			if game.objects_left_in_age <= 0 {
 				game.end_of_age_triggered = true
 			} else {
-				game.choice_state = .Choose_Wonder_To_Draft
+				game.next_choice_state = .Choose_Wonder_To_Draft
 			}
 		}
 	case Construct_Card:
@@ -737,7 +826,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		{
 			slot := &board[move_data.slot_idx]
 			card_to_discard := remove_card_from_board(slot, game)
-			player.coins += 3 + player.object_kind_count_owned[.Yellow]
+			player.coins += 2 + player.object_kind_count_owned[.Yellow]
 			append(&game.cards_discarded, card_to_discard)
 		}
 	case Select_Progress_Token:
@@ -767,14 +856,17 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	case Select_Player:
 		{
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			game.next_choice_state = .Choose_Object_To_Construct_Or_Discard
 			if move.choice_state == .Choose_First_Player {
 				game.turn_player = move_data.chosen_player
 			}
 		}
 	}
 
+	append(&game.move_history, move)
+
 	if game.end_of_age_triggered {
+		// if a go-again wonder was played as last card, it doesnt carry over to next age
 		game.go_again_active = false
 		game.age = Age(int(game.age) + 1)
 		if game.age != .Final_Scoring {
@@ -784,15 +876,21 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			if game.age != .Age1 {
 				if game.military_track > 0 {game.turn_player = .P1}
 				if game.military_track < 0 {game.turn_player = .P2}
-				if game.military_track == 0 {
-					//TODO tiebreak military
-				}
-				game.choice_state = .Choose_First_Player
+				// if military is a tie, the last action taker choses first
+				// so we dont need to change the turn player
+				game.next_choice_state = .Choose_First_Player
 			}
 		} else {
 			game.completed = true
-			//TODO check_victory_points()
-			//game.winner = whoever
+			// TODO check the winner
+			return
+		}
+	}
+
+	if game.next_choice_state == .Choose_Object_To_Construct_Or_Discard {
+		if !game.go_again_active {
+			change_turn_player(game)
+			game.go_again_active = false
 		}
 	}
 }

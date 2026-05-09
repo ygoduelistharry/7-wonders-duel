@@ -14,9 +14,7 @@ Object :: struct {
 	vp_produced:                      int,
 	linking_symbol_produced:          Linking_Symbol,
 	science_symbol_produced:          Science_Symbol,
-	// end of game variable VP
-	coin_per_vp:                      int,
-	vp_per_object_kind:               Object_Kind_Count,
+	guild:                            Guild,
 	// wonder specific traits
 	coins_destroyed:                  int,
 	go_again:                         bool,
@@ -27,8 +25,7 @@ Object :: struct {
 }
 
 Object_Name :: enum {
-	None,
-	Lumber_Yard,
+	Lumber_Yard = 1,
 	Logging_Camp,
 	Clay_Pool,
 	Clay_Pit,
@@ -116,7 +113,6 @@ Object_Name :: enum {
 }
 
 objects_db: [Object_Name]Object = {
-	.None = {},
 	.Lumber_Yard = {age = .Age1, kind = .Brown, resources_produced = #partial{.Wood = 1}},
 	.Logging_Camp = {
 		age = .Age1,
@@ -522,51 +518,46 @@ objects_db: [Object_Name]Object = {
 		vp_produced = 3,
 	},
 	.Merchants_Guild = {
+		guild = .Merchants_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Clay = 1, .Wood = 1, .Glass = 1, .Papyrus = 1}},
-		coins_per_object_produced = #partial{.Yellow = 1},
-		vp_per_object_kind = #partial{.Yellow = 1},
 	},
 	.Shipowners_Guild = {
+		guild = .Shipowners_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Clay = 1, .Stone = 1, .Glass = 1, .Papyrus = 1}},
-		coins_per_object_produced = #partial{.Brown = 1, .Grey = 1},
-		vp_per_object_kind = #partial{.Brown = 1, .Grey = 1},
 	},
 	.Builders_Guild = {
+		guild = .Builders_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Clay = 1, .Wood = 1, .Glass = 1}},
-		vp_per_object_kind = #partial{.Wonder = 2},
 	},
 	.Magistrates_Guild = {
+		guild = .Magistrates_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Wood = 2, .Clay = 1, .Papyrus = 1}},
-		coins_per_object_produced = #partial{.Blue = 1},
-		vp_per_object_kind = #partial{.Blue = 1},
 	},
 	.Scientists_Guild = {
+		guild = .Scientists_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Clay = 2, .Wood = 2}},
-		coins_per_object_produced = #partial{.Green = 1},
-		vp_per_object_kind = #partial{.Green = 1},
 	},
 	.Moneylenders_Guild = {
+		guild = .Moneylenders_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Wood = 2}},
-		coin_per_vp = 3,
 	},
 	.Tacticians_Guild = {
+		guild = .Tacticians_Guild,
 		age = .Age3,
 		kind = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Clay = 1, .Papyrus = 1}},
-		coins_per_object_produced = #partial{.Red = 1},
-		vp_per_object_kind = #partial{.Red = 1},
 	},
 	.The_Appian_Way = {
 		age = .Draft,
