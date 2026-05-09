@@ -1,6 +1,5 @@
 package swd_engine
 
-import q "core:container/queue"
 import "core:math/bits"
 // import linalg "core:math/linalg"
 import "core:math/rand"
@@ -106,8 +105,7 @@ Resource_Key_Value_Pair :: struct {
 }
 brown_resources: Resources = {.Clay, .Stone, .Wood}
 grey_resources: Resources = {.Glass, .Papyrus}
-resource_dot_product :: proc(r1, r2: Resource_Count) -> int {
-	sum: int
+resource_dot_product :: proc(r1, r2: Resource_Count) -> (sum: int) {
 	for resource in Resource {
 		sum += r1[resource] * r2[resource]
 	}
@@ -142,7 +140,8 @@ Player_State :: struct {
 	science_symbols:                    Science_Symbol_Count,
 	unique_science_symbols:             int,
 	linking_symbols:                    Linking_Symbols,
-	fixed_vp:                           int,
+	fixed_vp_from_blue:                 int,
+	fixed_vp_from_other:                int,
 	guilds_built:                       Guilds,
 }
 
@@ -195,9 +194,7 @@ Game :: struct {
 	completed:                   bool,
 	winner:                      Player_ID,
 }
-create_new_game :: proc(rng_seed: i64 = -1) -> Game {
-	new_game: Game = {}
-
+create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 	if rng_seed < 0 {
 		new_game.rng_seed = u64(time.now()._nsec)} else {
 		new_game.rng_seed = u64(rng_seed)
@@ -413,9 +410,8 @@ Move :: struct {
 	acting_player: Player_ID,
 }
 
-get_valid_moves :: proc(game: Game) -> [dynamic; 64]Move {
+get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	if game.completed {return {}}
-	valid_moves: [dynamic; 64]Move
 	turn_player_id := game.turn_player
 	opponent_id := Player_ID(-1 * int(turn_player_id))
 	turn_player := game.player_states[turn_player_id]
@@ -541,48 +537,48 @@ get_guild_value :: proc(guild: Guild, player_id: Player_ID, game: Game) -> (vp: 
 	switch guild {
 	case .Builders_Guild:
 		{
-			mult := max(len(player.wonders_constructed), len(opponent.wonders_constructed))
-			vp = 2 * mult
+			count := max(len(player.wonders_constructed), len(opponent.wonders_constructed))
+			vp = 2 * count
 		}
 	case .Moneylenders_Guild:
 		{
-			mult := max(player.coins, opponent.coins)
-			vp = mult / 3
+			count := max(player.coins, opponent.coins)
+			vp = count / 3
 		}
 	case .Scientists_Guild:
 		{
-			mult := max(player_obj_count[.Green], opponent_obj_count[.Green])
-			vp = mult
-			coin = mult
+			count := max(player_obj_count[.Green], opponent_obj_count[.Green])
+			vp = count
+			coin = count
 		}
 	case .Merchants_Guild:
 		{
-			mult := max(player_obj_count[.Yellow], opponent_obj_count[.Yellow])
-			vp = mult
-			coin = mult
+			count := max(player_obj_count[.Yellow], opponent_obj_count[.Yellow])
+			vp = count
+			coin = count
 		}
 	case .Magistrates_Guild:
 		{
-			mult := max(player_obj_count[.Blue], opponent_obj_count[.Blue])
-			vp = mult
-			coin = mult
+			count := max(player_obj_count[.Blue], opponent_obj_count[.Blue])
+			vp = count
+			coin = count
 
 		}
 	case .Tacticians_Guild:
 		{
-			mult := max(player_obj_count[.Red], opponent_obj_count[.Red])
-			vp = mult
-			coin = mult
+			count := max(player_obj_count[.Red], opponent_obj_count[.Red])
+			vp = count
+			coin = count
 
 		}
 	case .Shipowners_Guild:
 		{
-			mult := max(
+			count := max(
 				player_obj_count[.Grey] + player_obj_count[.Brown],
 				opponent_obj_count[.Grey] + opponent_obj_count[.Brown],
 			)
-			vp = mult
-			coin = mult
+			vp = count
+			coin = count
 		}
 	}
 	return vp, coin
@@ -634,7 +630,11 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player.variable_brown_resource_production += object.variable_brown_resource_produced
 	player.variable_grey_resource_production += object.variable_grey_resource_produced
 
-	player.fixed_vp += object.vp_produced
+	if object.kind == .Blue {
+		player.fixed_vp_from_blue += object.vp_produced
+	} else {
+		player.fixed_vp_from_other += object.vp_produced
+	}
 
 	player.linking_symbols |= {object.linking_symbol_produced}
 
@@ -691,9 +691,9 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 }
 
 // Returns the card removed from the slot (will be .None if slot was empty)
-remove_card_from_board :: proc(slot: ^Board_Slot, game: ^Game) -> Object_Name {
+remove_card_from_board :: proc(slot: ^Board_Slot, game: ^Game) -> (card_removed: Object_Name) {
 	board: ^Board = &game.boards[slot.age]
-	card_removed := slot.card_in_slot
+	card_removed = slot.card_in_slot
 	if card_removed != {} {
 		slot.card_in_slot = {}
 		game.objects_left_in_age -= 1
@@ -716,7 +716,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	switch token {
 	case .Agriculture:
 		{
-			player.fixed_vp += 4
+			player.fixed_vp_from_blue += 4
 			player.coins += 6
 		}
 	case .Architechture:
@@ -736,7 +736,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	case .Mathematics:
 		{}
 	case .Philosophy:
-		{player.fixed_vp += 7}
+		{player.fixed_vp_from_blue += 7}
 	case .Strategy:
 		{}
 	case .Theology:
@@ -746,11 +746,22 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 	}
 }
 
-calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> int {
+calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> (vp: int, blue_vp: int) {
 	player := game.player_states[player_id]
 	opponent := game.player_states[other_player_id(player_id)]
 
-	vp := player.fixed_vp + player.coins / 3
+	blue_vp = player.fixed_vp_from_blue
+	vp += blue_vp + player.fixed_vp_from_other + player.coins / 3
+
+	player_military_score := int(player_id) * game.military_track
+	switch player_military_score {
+	case 1 ..= 2:
+		{vp += 2}
+	case 3 ..= 5:
+		{vp += 5}
+	case 6 ..= 8:
+		{vp += 10}
+	}
 
 	if .Mathematics in player.progress_tokens {
 		vp += int(bits.count_ones(transmute(u16)player.progress_tokens))
@@ -762,7 +773,7 @@ calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> int {
 		vp_gain, _ := get_guild_value(guild, player_id, game)
 		vp += vp_gain
 	}
-	return vp
+	return vp, blue_vp
 }
 
 
@@ -882,7 +893,15 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			}
 		} else {
 			game.completed = true
-			// TODO check the winner
+			vp_p1, blue_vp_p1 := calculate_victory_points(Player_ID.P1, game^)
+			vp_p2, blue_vp_p2 := calculate_victory_points(Player_ID.P2, game^)
+			net_vp, net_blue_vp := vp_p2 - vp_p1, blue_vp_p2 - blue_vp_p1
+
+			if net_vp != 0 {
+				if net_vp < 0 {game.winner = .P1} else {game.winner = .P2}
+			} else {
+				if net_blue_vp < 0 {game.winner = .P1} else {game.winner = .P2}
+			}
 			return
 		}
 	}
