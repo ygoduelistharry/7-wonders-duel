@@ -152,11 +152,10 @@ Player_ID :: enum i8 {
 other_player_id :: proc(player_id: Player_ID) -> Player_ID {return Player_ID(-1 * int(player_id))}
 
 Age :: enum u8 {
-	Draft = 1,
+	DraftWonders = 1,
 	Age1,
 	Age2,
 	Age3,
-	Final_Scoring,
 }
 
 Choice_State :: enum u16 {
@@ -205,7 +204,7 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 
 	new_game.turn_player = rand.choice_enum(Player_ID, rng)
 
-	new_game.age = .Draft
+	new_game.age = .DraftWonders
 	new_game.objects_left_in_age = 8
 
 	wonders := get_all_wonder_names()
@@ -427,19 +426,21 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		}
 	case .Choose_Object_To_Construct_Or_Discard:
 		{
-			// get all constructable wonders
+			// get all constructable wonders if 7 haven't been built yet
 			constructable_wonder_data: [dynamic; 4]Construct_Wonder
-			for wonder, idx in turn_player.wonders_available {
-				wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
-				if wonder_cost.total_coin_cost <= turn_player.coins {
-					append(
-						&constructable_wonder_data,
-						Construct_Wonder {
-							wonder_name = wonder,
-							wonder_idx = idx,
-							cost = wonder_cost,
-						},
-					)
+			if len(turn_player.wonders_constructed) + len(opponent.wonders_constructed) < 7 {
+				for wonder, idx in turn_player.wonders_available {
+					wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
+					if wonder_cost.total_coin_cost <= turn_player.coins {
+						append(
+							&constructable_wonder_data,
+							Construct_Wonder {
+								wonder_name = wonder,
+								wonder_idx = idx,
+								cost = wonder_cost,
+							},
+						)
+					}
 				}
 			}
 
@@ -879,8 +880,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	if game.end_of_age_triggered {
 		// if a go-again wonder was played as last card, it doesnt carry over to next age
 		game.go_again_active = false
-		game.age = Age(int(game.age) + 1)
-		if game.age != .Final_Scoring {
+		if game.age != .Age3 {
+			game.age = Age(int(game.age) + 1)
 			game.objects_left_in_age = 20
 			// we have a set first player in act 1,
 			// and it should be correct already

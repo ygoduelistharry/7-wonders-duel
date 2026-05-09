@@ -24,6 +24,7 @@ Object :: struct {
 	gain_unavailable_progress_token:  bool,
 }
 
+// need to include The Messe and The Statue of Liberty at some point
 Object_Name :: enum {
 	Lumber_Yard = 1,
 	Logging_Camp,
@@ -560,7 +561,7 @@ objects_db: [Object_Name]Object = {
 		cost = {resources = #partial{.Stone = 2, .Clay = 1, .Papyrus = 1}},
 	},
 	.The_Appian_Way = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Clay = 2, .Stone = 2}},
 		coins_produced = 3,
@@ -569,28 +570,28 @@ objects_db: [Object_Name]Object = {
 		go_again = true,
 	},
 	.The_Great_Lighthouse = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 2, .Stone = 1, .Wood = 1}},
 		variable_brown_resource_produced = 1,
 		vp_produced = 4,
 	},
 	.The_Sphinx = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Glass = 2, .Clay = 1, .Stone = 1}},
 		vp_produced = 6,
 		go_again = true,
 	},
 	.The_Mausoleum = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 2, .Clay = 2}},
 		vp_produced = 2,
 		revive_card = true,
 	},
 	.The_Statue_of_Zeus = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 2, .Clay = 1, .Wood = 1, .Stone = 1}},
 		military_produced = 1,
@@ -598,7 +599,7 @@ objects_db: [Object_Name]Object = {
 		destroy_brown_card = true,
 	},
 	.Circus_Maximus = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Glass = 1, .Wood = 1, .Stone = 2}},
 		military_produced = 1,
@@ -606,7 +607,7 @@ objects_db: [Object_Name]Object = {
 		destroy_grey_card = true,
 	},
 	.Piraeus = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Clay = 1, .Stone = 1, .Wood = 2}},
 		variable_grey_resource_produced = 1,
@@ -614,20 +615,20 @@ objects_db: [Object_Name]Object = {
 		go_again = true,
 	},
 	.The_Pyramids = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Stone = 3}},
 		vp_produced = 9,
 	},
 	.The_Temple_of_Artemis = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Stone = 1, .Wood = 1}},
 		coins_produced = 9,
 		go_again = true,
 	},
 	.The_Hanging_Gardens = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Wood = 2}},
 		coins_produced = 6,
@@ -635,14 +636,14 @@ objects_db: [Object_Name]Object = {
 		go_again = true,
 	},
 	.The_Great_Library = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Wood = 3}},
 		vp_produced = 4,
 		gain_unavailable_progress_token = true,
 	},
 	.The_Colossus = {
-		age = .Draft,
+		age = .DraftWonders,
 		kind = .Wonder,
 		cost = {resources = #partial{.Glass = 1, .Clay = 3}},
 		military_produced = 2,
