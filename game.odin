@@ -18,13 +18,13 @@ Card_Atlas :: enum {
 }
 Card_Atlases :: [Card_Atlas]rl.Texture2D
 
-load_object_textures :: proc() -> (textures: Card_Atlases) {
-	textures[.Wonders] = rl.LoadTexture("images/wonders.jpg")
-	textures[.Age1] = rl.LoadTexture("images/age1.jpg")
-	textures[.Age2] = rl.LoadTexture("images/age2.jpg")
-	textures[.Age3] = rl.LoadTexture("images/age3.jpg")
-	textures[.Guilds] = rl.LoadTexture("images/guilds.jpg")
-	return textures
+load_object_atlases :: proc() -> (atlases: Card_Atlases) {
+	atlases[.Wonders] = rl.LoadTexture("images/wonders.jpg")
+	atlases[.Age1] = rl.LoadTexture("images/age1.jpg")
+	atlases[.Age2] = rl.LoadTexture("images/age2.jpg")
+	atlases[.Age3] = rl.LoadTexture("images/age3.jpg")
+	atlases[.Guilds] = rl.LoadTexture("images/guilds.jpg")
+	return atlases
 }
 
 Card_Atlas_Key :: struct {
@@ -119,7 +119,8 @@ object_atlas_keys: [swd.Object_Name]Card_Atlas_Key = {
 	.Shipowners_Guild      = {.Guilds, {0, 6}},
 }
 
-load_progress_token_textures :: proc() -> (textures: [swd.Progress_Token]rl.Texture2D) {
+Token_Textures :: [swd.Progress_Token]rl.Texture2D
+load_progress_token_textures :: proc() -> (textures: Token_Textures) {
 	textures[.Agriculture] = rl.LoadTexture("image/argiculture.png")
 	textures[.Architechture] = rl.LoadTexture("image/architechture.png")
 	textures[.Economy] = rl.LoadTexture("image/economy.png")
@@ -133,14 +134,8 @@ load_progress_token_textures :: proc() -> (textures: [swd.Progress_Token]rl.Text
 	return textures
 }
 
-window_setup :: proc() {
-	rl.SetConfigFlags({.VSYNC_HINT})
-	rl.InitWindow(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT, "7 Wonders Duel")
-	rl.SetTargetFPS(MAX_FPS)
-}
-
-handle_input :: proc() {}
-
+card_atlases: Card_Atlases
+token_textures: Token_Textures
 
 get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	key := object_atlas_keys[name]
@@ -161,14 +156,13 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	return {f32(col) * width, f32(row) * height, width, height}
 }
 
-draw_card :: proc(
+draw_card_texture :: proc(
 	name: swd.Object_Name,
-	atlases: Card_Atlases,
 	dest_rect: rl.Rectangle,
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 ) {
-	texture := atlases[object_atlas_keys[name].atlas]
+	texture := card_atlases[object_atlas_keys[name].atlas]
 	source_rect := get_card_sub_texture_rect(name)
 	rl.DrawTexturePro(
 		texture,
@@ -180,16 +174,23 @@ draw_card :: proc(
 	)
 }
 
+
+window_setup :: proc() {
+	rl.SetConfigFlags({.VSYNC_HINT})
+	rl.InitWindow(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT, "7 Wonders Duel")
+	rl.SetTargetFPS(MAX_FPS)
+}
+
+handle_input :: proc() {}
+
 draw_frame :: proc(game: swd.Game) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
-	for slot in game.boards[game.age] {
-		// draw_card(slot.card_in_slot)
-	}
+	draw_card_texture(.Builders_Guild, {500, 500, 130, 200})
+	draw_card_texture(.The_Appian_Way, {700, 700, 400, 260})
 	rl.EndDrawing()
 }
 
-game_object_textures: Card_Atlases
 
 main :: proc() {
 	// tracking allocator
@@ -218,18 +219,12 @@ main :: proc() {
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 
 	window_setup()
-	game_object_textures = load_object_textures()
-	progress_token_textures := load_progress_token_textures()
+	card_atlases = load_object_atlases()
+	token_textures = load_progress_token_textures()
 
 	for !rl.WindowShouldClose() {
-		rl.BeginDrawing()
-		rl.ClearBackground(BACKGROUND_COLOUR)
-
-		draw_card(.Builders_Guild, game_object_textures, {500, 500, 130, 200})
-		draw_card(.The_Appian_Way, game_object_textures, {700, 700, 400, 260})
-		rl.EndDrawing()
 		handle_input()
-		// draw_frame()
+		draw_frame(game)
 	}
 
 }
