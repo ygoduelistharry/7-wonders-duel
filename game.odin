@@ -5,7 +5,7 @@ import "core:mem"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
-STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1920, 1080
+STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1080, 720
 MAX_FPS :: 120
 BACKGROUND_COLOUR: rl.Color : {76, 53, 83, 255}
 
@@ -121,16 +121,16 @@ object_atlas_keys: [swd.Object_Name]Card_Atlas_Key = {
 
 Token_Textures :: [swd.Progress_Token]rl.Texture2D
 load_progress_token_textures :: proc() -> (textures: Token_Textures) {
-	textures[.Agriculture] = rl.LoadTexture("image/argiculture.png")
-	textures[.Architechture] = rl.LoadTexture("image/architechture.png")
-	textures[.Economy] = rl.LoadTexture("image/economy.png")
-	textures[.Law] = rl.LoadTexture("image/law.png")
-	textures[.Masonry] = rl.LoadTexture("image/masonry.png")
-	textures[.Mathematics] = rl.LoadTexture("image/mathematics.png")
-	textures[.Philosophy] = rl.LoadTexture("image/philosophy.png")
-	textures[.Strategy] = rl.LoadTexture("image/strategy.png")
-	textures[.Theology] = rl.LoadTexture("image/theology.png")
-	textures[.Urbanism] = rl.LoadTexture("image/urbanism.png")
+	textures[.Agriculture] = rl.LoadTexture("images/Argiculture.png")
+	textures[.Architechture] = rl.LoadTexture("images/Architechture.png")
+	textures[.Economy] = rl.LoadTexture("images/Economy.png")
+	textures[.Law] = rl.LoadTexture("images/Law.png")
+	textures[.Masonry] = rl.LoadTexture("images/Masonry.png")
+	textures[.Mathematics] = rl.LoadTexture("images/Mathematics.png")
+	textures[.Philosophy] = rl.LoadTexture("images/Philosophy.png")
+	textures[.Strategy] = rl.LoadTexture("images/Strategy.png")
+	textures[.Theology] = rl.LoadTexture("images/Theology.png")
+	textures[.Urbanism] = rl.LoadTexture("images/Urbanism.png")
 	return textures
 }
 
