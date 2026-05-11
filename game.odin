@@ -5,7 +5,11 @@ import "core:mem"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
-STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1080, 720
+STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1920, 1080
+get_screen_centre :: proc() -> [2]f32 {
+	return {auto_cast rl.GetScreenWidth() / 2, auto_cast rl.GetScreenHeight() / 2}
+}
+
 MAX_FPS :: 120
 BACKGROUND_COLOUR: rl.Color : {76, 53, 83, 255}
 
@@ -24,6 +28,9 @@ load_object_atlases :: proc() -> (atlases: Card_Atlases) {
 	atlases[.Age2] = rl.LoadTexture("images/age2.jpg")
 	atlases[.Age3] = rl.LoadTexture("images/age3.jpg")
 	atlases[.Guilds] = rl.LoadTexture("images/guilds.jpg")
+	for &atlas in atlases {
+		rl.SetTextureFilter(atlas, .BILINEAR)
+	}
 	return atlases
 }
 
@@ -142,7 +149,7 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	width, height: f32
 	switch key.atlas {
 	case .Wonders:
-		{width, height = 858, 551}
+		{width, height = 858, 460}
 	case .Guilds:
 		{width, height = 557, 858}
 	case .Age1:
@@ -153,12 +160,16 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 		{width, height = 549, 858}
 	}
 	row, col := key.grid_position[0], key.grid_position[1]
-	return {f32(col) * width, f32(row) * height, width, height}
+	pos: [2]f32 = {f32(col) * width, f32(row) * height}
+	if key.atlas == .Wonders {pos.y += 60}
+	return {pos.x, pos.y, width, height}
 }
+
 
 draw_card_texture :: proc(
 	name: swd.Object_Name,
-	dest_rect: rl.Rectangle,
+	position: [2]f32,
+	size: [2]f32,
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 ) {
@@ -167,27 +178,74 @@ draw_card_texture :: proc(
 	rl.DrawTexturePro(
 		texture,
 		source_rect,
-		dest_rect,
-		{source_rect.width, source_rect.height} / 2,
+		{position.x, position.y, size.x, size.y},
+		{size.x, size.y} / 2,
 		rotation,
 		tint,
 	)
 }
 
+military_track_texture: rl.Texture2D
 
+camera: rl.Camera2D
 window_setup :: proc() {
-	rl.SetConfigFlags({.VSYNC_HINT})
+	rl.SetConfigFlags({.VSYNC_HINT} | {.WINDOW_RESIZABLE})
 	rl.InitWindow(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT, "7 Wonders Duel")
 	rl.SetTargetFPS(MAX_FPS)
+	camera.offset = {STARTING_WINDOW_WIDTH / 2, STARTING_WINDOW_HEIGHT / 2}
+	camera.target = {STARTING_WINDOW_WIDTH / 2, STARTING_WINDOW_HEIGHT / 2}
+	camera.zoom = 1
 }
 
 handle_input :: proc() {}
 
+CARD_SIZE: [2]f32 : {120, 190}
+WONDER_SIZE: [2]f32 : {225 * 1.3, 135 * 1.3}
+
 draw_frame :: proc(game: swd.Game) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
-	draw_card_texture(.Builders_Guild, {500, 500, 130, 200})
-	draw_card_texture(.The_Appian_Way, {700, 700, 400, 260})
+	rl.BeginMode2D(camera)
+	vert_offset: f32 = 1.0 / 2.8
+	for col in 0 ..< 6 {
+		x := STARTING_WINDOW_WIDTH / 2 - CARD_SIZE.x * 2.5 + f32(col) * CARD_SIZE.x
+		for row in 0 ..< 7 {
+			y := 5 + CARD_SIZE.y * 0.5 + f32(row) * CARD_SIZE.y * vert_offset
+			draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
+		}
+	}
+	for col in 0 ..< 2 {
+		gap: f32 = 5
+		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
+		for row in 0 ..< 2 {
+			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
+			draw_card_texture(.The_Appian_Way, {x, y}, WONDER_SIZE)
+		}
+	}
+
+	for col in 0 ..< 4 {
+		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
+		for row in 0 ..< 10 {
+			y := WONDER_SIZE.y * 2 + 75 + f32(row + 2) * CARD_SIZE.y / 4
+			draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
+		}
+	}
+	military_track_width: f32 = 780.0
+	military_track_height: f32 = 240.0
+	rl.DrawTexturePro(
+		military_track_texture,
+		{0, 0, 3000, 900},
+		{
+			STARTING_WINDOW_WIDTH / 2,
+			STARTING_WINDOW_HEIGHT / 2 + 175,
+			military_track_width,
+			military_track_height,
+		},
+		{military_track_width / 2, military_track_height / 2},
+		0,
+		rl.WHITE,
+	)
+	rl.EndMode2D()
 	rl.EndDrawing()
 }
 
@@ -221,10 +279,16 @@ main :: proc() {
 	window_setup()
 	card_atlases = load_object_atlases()
 	token_textures = load_progress_token_textures()
+	military_track_texture = rl.LoadTexture("images/military_track.png")
 
 	for !rl.WindowShouldClose() {
-		handle_input()
+		if rl.IsWindowResized() {
+			camera.zoom = min(
+				f32(rl.GetScreenWidth()) / f32(STARTING_WINDOW_WIDTH),
+				f32(rl.GetScreenHeight()) / f32(STARTING_WINDOW_HEIGHT),
+			)
+			camera.offset = get_screen_centre()
+		}
 		draw_frame(game)
 	}
-
 }
