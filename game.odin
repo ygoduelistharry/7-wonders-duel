@@ -166,6 +166,7 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 }
 
 
+rounded_corners_shader: rl.Shader
 draw_card_texture :: proc(
 	name: swd.Object_Name,
 	position: [2]f32,
@@ -173,16 +174,30 @@ draw_card_texture :: proc(
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 ) {
-	texture := card_atlases[object_atlas_keys[name].atlas]
+	atlas := card_atlases[object_atlas_keys[name].atlas]
 	source_rect := get_card_sub_texture_rect(name)
+	normalised_source_rect_bounds: [4]f32 = {
+		source_rect.x / f32(atlas.width),
+		source_rect.y / f32(atlas.height),
+		(source_rect.x + source_rect.width) / f32(atlas.width),
+		(source_rect.y + source_rect.height) / f32(atlas.height),
+	}
+	rl.SetShaderValue(
+		rounded_corners_shader,
+		rl.GetShaderLocation(rounded_corners_shader, "spriteUVBounds"),
+		&normalised_source_rect_bounds,
+		.VEC4,
+	)
+	rl.BeginShaderMode(rounded_corners_shader)
 	rl.DrawTexturePro(
-		texture,
+		atlas,
 		source_rect,
 		{position.x, position.y, size.x, size.y},
 		{size.x, size.y} / 2,
 		rotation,
 		tint,
 	)
+	rl.EndShaderMode()
 }
 
 military_track_texture: rl.Texture2D
@@ -280,6 +295,7 @@ main :: proc() {
 	card_atlases = load_object_atlases()
 	token_textures = load_progress_token_textures()
 	military_track_texture = rl.LoadTexture("images/military_track.png")
+	rounded_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
 
 	for !rl.WindowShouldClose() {
 		if rl.IsWindowResized() {
