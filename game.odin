@@ -2,6 +2,7 @@ package seven_wonders_duel
 
 import "core:fmt"
 import "core:mem"
+import "core:text/edit"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
@@ -13,15 +14,84 @@ get_screen_centre :: proc() -> [2]f32 {
 MAX_FPS :: 120
 BACKGROUND_COLOUR: rl.Color : {76, 53, 83, 255}
 
-Card_Atlas :: enum {
+Card_Back :: enum {
 	Wonders,
 	Age1,
 	Age2,
 	Age3,
 	Guilds,
 }
-Card_Atlases :: [Card_Atlas]rl.Texture2D
 
+card_structure_grids: [swd.Age][20][2]int = #partial {
+	.Age1 = {
+		{-5, 2},
+		{-3, 2},
+		{-1, 2},
+		{1, 2},
+		{3, 2},
+		{5, 2},
+		{-4, 1},
+		{-2, 1},
+		{0, 1},
+		{2, 1},
+		{4, 1},
+		{-3, 0},
+		{-1, 0},
+		{1, 0},
+		{3, 0},
+		{-2, -1},
+		{0, -1},
+		{2, -1},
+		{-1, -2},
+		{1, -2},
+	},
+	.Age2 = {
+		{-1, 2},
+		{1, 2},
+		{-2, 1},
+		{0, 1},
+		{2, 1},
+		{-3, 0},
+		{-1, 0},
+		{1, 0},
+		{3, 0},
+		{-4, -1},
+		{-2, -1},
+		{0, -1},
+		{2, -1},
+		{4, -1},
+		{-5, -2},
+		{-3, -2},
+		{-1, -2},
+		{1, -2},
+		{3, -2},
+		{5, -2},
+	},
+	.Age3 = {
+		{1, 3},
+		{1, 3},
+		{-2, 2},
+		{0, 2},
+		{2, 2},
+		{-3, 1},
+		{-1, 1},
+		{1, 1},
+		{3, 1},
+		{-2, 0},
+		{2, 0},
+		{-3, -1},
+		{-1, -1},
+		{1, -1},
+		{3, -1},
+		{-2, -2},
+		{0, -2},
+		{2, -2},
+		{-1, -3},
+		{1, -3},
+	},
+}
+
+Card_Atlases :: [Card_Back]rl.Texture2D
 load_object_atlases :: proc() -> (atlases: Card_Atlases) {
 	atlases[.Wonders] = rl.LoadTexture("images/wonders.jpg")
 	atlases[.Age1] = rl.LoadTexture("images/age1.jpg")
@@ -35,7 +105,7 @@ load_object_atlases :: proc() -> (atlases: Card_Atlases) {
 }
 
 Card_Atlas_Key :: struct {
-	atlas:         Card_Atlas,
+	atlas:         Card_Back,
 	grid_position: [2]int,
 }
 object_atlas_keys: [swd.Object_Name]Card_Atlas_Key = {
@@ -126,7 +196,7 @@ object_atlas_keys: [swd.Object_Name]Card_Atlas_Key = {
 	.Shipowners_Guild      = {.Guilds, {0, 6}},
 }
 
-Card_Back_Textures :: [Card_Atlas]rl.Texture2D
+Card_Back_Textures :: [Card_Back]rl.Texture2D
 load_card_back_textures :: proc() -> (textures: Card_Back_Textures) {
 	textures[.Age1] = rl.LoadTexture("images/age1_back.png")
 	textures[.Age2] = rl.LoadTexture("images/age2_back.png")
@@ -223,6 +293,33 @@ draw_card_texture :: proc(
 	rl.EndShaderMode()
 }
 
+draw_card_back :: proc(
+	card_back: Card_Back,
+	position: [2]f32,
+	size: [2]f32,
+	rotation: f32 = 0,
+	tint: rl.Color = rl.WHITE,
+) {
+	texture := card_back_textures[card_back]
+	normalised_source_rect_bounds: [4]f32 = {0, 0, 1, 1}
+	rl.SetShaderValue(
+		rounded_corners_shader,
+		rl.GetShaderLocation(rounded_corners_shader, "spriteUVBounds"),
+		&normalised_source_rect_bounds,
+		.VEC4,
+	)
+	rl.BeginShaderMode(rounded_corners_shader)
+	rl.DrawTexturePro(
+		texture,
+		{0, 0, f32(texture.width), f32(texture.height)},
+		{position.x, position.y, size.x, size.y},
+		{size.x, size.y} / 2,
+		rotation,
+		tint,
+	)
+	rl.EndShaderMode()
+}
+
 
 camera: rl.Camera2D
 window_setup :: proc() {
@@ -236,22 +333,51 @@ window_setup :: proc() {
 
 handle_input :: proc() {}
 
-CARD_SIZE: [2]f32 : {120, 190}
-WONDER_SIZE: [2]f32 : {225 * 1.3, 135 * 1.3}
 
+CARD_SIZE: [2]f32 : {120, 190}
+WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
 font: rl.Font
+
+draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
+	y_offset: f32 = CARD_SIZE.y * 1.0 / 2.8
+	x_offset: f32 = CARD_SIZE.x * 1.0 / 2.0 + 3
+	if age == .DraftWonders {
+
+	} else {
+		layout_grid := card_structure_grids[age]
+		for i := 19; i >= 0; i -= 1 {
+			grid_pos := layout_grid[i]
+			slot := game.boards[age][i]
+			texture_pos: [2]f32 =
+				midpoint + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
+			if slot.card_in_slot == {} {continue}
+			if slot.visible {
+				draw_card_texture(slot.card_in_slot, texture_pos, CARD_SIZE)
+			} else {
+				draw_card_back(.Age1, texture_pos, CARD_SIZE)
+			}
+		}
+	}
+}
+
 draw_frame :: proc(game: swd.Game) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
 	rl.BeginMode2D(camera)
-	vert_offset: f32 = 1.0 / 2.8
-	for col in 0 ..< 6 {
-		x := STARTING_WINDOW_WIDTH / 2 - CARD_SIZE.x * 2.5 + f32(col) * CARD_SIZE.x
-		for row in 0 ..< 7 {
-			y := 5 + CARD_SIZE.y * 0.5 + f32(row) * CARD_SIZE.y * vert_offset
-			draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
-		}
+	// vert_offset: f32 = 1.0 / 2.8
+	// for col in 0 ..< 6 {
+	// 	x := STARTING_WINDOW_WIDTH / 2 - CARD_SIZE.x * 2.5 + f32(col) * CARD_SIZE.x
+	// 	for row in 0 ..< 7 {
+	// 		y := 5 + CARD_SIZE.y * 0.5 + f32(row) * CARD_SIZE.y * vert_offset
+	// 		draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
+	// 	}
+	// }
+	board_midpoint: [2]f32 = {
+		STARTING_WINDOW_WIDTH / 2,
+		5 + CARD_SIZE.y * 0.5 + 3 * CARD_SIZE.y / 2.8,
 	}
+	draw_card_structure(board_midpoint, .Age1, game)
+
 	for col in 0 ..< 2 {
 		gap: f32 = 5
 		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
@@ -265,7 +391,7 @@ draw_frame :: proc(game: swd.Game) {
 		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
 		for row in 0 ..< 8 {
 			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
-			draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
+			draw_card_back(.Age1, {x, y}, CARD_SIZE)
 		}
 	}
 
@@ -348,7 +474,7 @@ draw_frame :: proc(game: swd.Game) {
 			rl.WHITE,
 		)
 	}
-	coin_diameter: f32 = 120
+	coin_diameter: f32 = 110
 	coin_position: [2]f32 = {STARTING_WINDOW_WIDTH * 1 / 3, STARTING_WINDOW_HEIGHT * 3 / 4 + 100}
 	rl.DrawTexturePro(
 		coin_texture,
@@ -358,7 +484,7 @@ draw_frame :: proc(game: swd.Game) {
 		0,
 		rl.WHITE,
 	)
-	fontSize: i32 = 110
+	fontSize: i32 = 90
 	outlineSize: f32 = 4
 	offsets: [4][2]f32 = {
 		{-outlineSize, -outlineSize},
@@ -366,9 +492,9 @@ draw_frame :: proc(game: swd.Game) {
 		{-outlineSize, outlineSize},
 		{outlineSize, outlineSize},
 	}
-	value: cstring = "7"
-	textWidth := rl.MeasureText(value, fontSize)
-	textPosition := coin_position - {f32(textWidth), f32(fontSize)} / 2
+	value: cstring = "15"
+	textSize := rl.MeasureTextEx(font, value, f32(fontSize), 0)
+	textPosition := coin_position - textSize / 2
 	textColour := rl.WHITE
 	borderColour := rl.BLACK
 	for offset in offsets {

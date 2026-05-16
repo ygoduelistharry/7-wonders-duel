@@ -60,7 +60,7 @@ Military_Token :: enum u8 {
 }
 Military_Tokens :: distinct bit_set[Military_Token;u8]
 
-Object_Kind :: enum u8 {
+Object_Colour :: enum u8 {
 	Brown = 1,
 	Grey,
 	Yellow,
@@ -70,10 +70,10 @@ Object_Kind :: enum u8 {
 	Purple,
 	Wonder,
 }
-Object_Kind_Count :: [Object_Kind]int
+Object_Kind_Count :: [Object_Colour]int
 object_kind_dot_product :: proc(r1, r2: Object_Kind_Count) -> int {
 	sum: int
-	for object in Object_Kind {
+	for object in Object_Colour {
 		sum += r1[object] * r2[object]
 	}
 	return sum

@@ -2,7 +2,7 @@ package swd_engine
 
 Object :: struct {
 	age:                              Age,
-	kind:                             Object_Kind,
+	kind:                             Object_Colour,
 	cost:                             Object_Base_Cost,
 	coins_produced:                   int,
 	coins_per_object_produced:        Object_Kind_Count,
