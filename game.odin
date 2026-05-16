@@ -126,23 +126,46 @@ object_atlas_keys: [swd.Object_Name]Card_Atlas_Key = {
 	.Shipowners_Guild      = {.Guilds, {0, 6}},
 }
 
-Token_Textures :: [swd.Progress_Token]rl.Texture2D
-load_progress_token_textures :: proc() -> (textures: Token_Textures) {
-	textures[.Agriculture] = rl.LoadTexture("images/Argiculture.png")
-	textures[.Architechture] = rl.LoadTexture("images/Architechture.png")
-	textures[.Economy] = rl.LoadTexture("images/Economy.png")
-	textures[.Law] = rl.LoadTexture("images/Law.png")
-	textures[.Masonry] = rl.LoadTexture("images/Masonry.png")
-	textures[.Mathematics] = rl.LoadTexture("images/Mathematics.png")
-	textures[.Philosophy] = rl.LoadTexture("images/Philosophy.png")
-	textures[.Strategy] = rl.LoadTexture("images/Strategy.png")
-	textures[.Theology] = rl.LoadTexture("images/Theology.png")
-	textures[.Urbanism] = rl.LoadTexture("images/Urbanism.png")
+Card_Back_Textures :: [Card_Atlas]rl.Texture2D
+load_card_back_textures :: proc() -> (textures: Card_Back_Textures) {
+	textures[.Age1] = rl.LoadTexture("images/age1_back.png")
+	textures[.Age2] = rl.LoadTexture("images/age2_back.png")
+	textures[.Age3] = rl.LoadTexture("images/age3_back.png")
+	textures[.Guilds] = rl.LoadTexture("images/guilds_back.png")
+	textures[.Wonders] = rl.LoadTexture("images/wonders_back.png")
+	for &texture in textures {
+		rl.SetTextureFilter(texture, .BILINEAR)
+	}
+	return textures
+}
+
+Progress_Token_Textures :: [swd.Progress_Token]rl.Texture2D
+load_progress_token_textures :: proc() -> (textures: Progress_Token_Textures) {
+	textures[.Agriculture] = rl.LoadTexture("images/agriculture.png")
+	textures[.Architechture] = rl.LoadTexture("images/architecture.png")
+	textures[.Economy] = rl.LoadTexture("images/economy.png")
+	textures[.Law] = rl.LoadTexture("images/law.png")
+	textures[.Masonry] = rl.LoadTexture("images/masonry.png")
+	textures[.Mathematics] = rl.LoadTexture("images/mathematics.png")
+	textures[.Philosophy] = rl.LoadTexture("images/philosophy.png")
+	textures[.Strategy] = rl.LoadTexture("images/strategy.png")
+	textures[.Theology] = rl.LoadTexture("images/theology.png")
+	textures[.Urbanism] = rl.LoadTexture("images/urbanism.png")
+	for &texture in textures {
+		rl.SetTextureFilter(texture, .BILINEAR)
+	}
 	return textures
 }
 
 card_atlases: Card_Atlases
-token_textures: Token_Textures
+card_back_textures: Card_Back_Textures
+progress_token_textures: Progress_Token_Textures
+military_track_texture: rl.Texture2D
+conflict_pawn_texture: rl.Texture2D
+military_token_2_texture: rl.Texture2D
+military_token_5_texture: rl.Texture2D
+coin_texture: rl.Texture2D
+
 
 get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	key := object_atlas_keys[name]
@@ -200,7 +223,6 @@ draw_card_texture :: proc(
 	rl.EndShaderMode()
 }
 
-military_track_texture: rl.Texture2D
 
 camera: rl.Camera2D
 window_setup :: proc() {
@@ -217,6 +239,7 @@ handle_input :: proc() {}
 CARD_SIZE: [2]f32 : {120, 190}
 WONDER_SIZE: [2]f32 : {225 * 1.3, 135 * 1.3}
 
+font: rl.Font
 draw_frame :: proc(game: swd.Game) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
@@ -240,26 +263,119 @@ draw_frame :: proc(game: swd.Game) {
 
 	for col in 0 ..< 4 {
 		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
-		for row in 0 ..< 10 {
-			y := WONDER_SIZE.y * 2 + 75 + f32(row + 2) * CARD_SIZE.y / 4
+		for row in 0 ..< 8 {
+			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
 			draw_card_texture(.Builders_Guild, {x, y}, CARD_SIZE)
 		}
 	}
-	military_track_width: f32 = 780.0
-	military_track_height: f32 = 240.0
+
+	military_track_size: [2]f32 = {780, 240}
 	rl.DrawTexturePro(
 		military_track_texture,
 		{0, 0, 3000, 900},
 		{
 			STARTING_WINDOW_WIDTH / 2,
 			STARTING_WINDOW_HEIGHT / 2 + 175,
-			military_track_width,
-			military_track_height,
+			military_track_size.x,
+			military_track_size.y,
 		},
-		{military_track_width / 2, military_track_height / 2},
+		military_track_size / 2,
 		0,
 		rl.WHITE,
 	)
+
+	military_token_size: [2]f32 = {44, 88}
+	for token in 0 ..< 2 {
+		factor: f32 = -1
+		if token == 1 {factor = 1}
+		token_2_offset: f32 = 145
+		token_5_offset: f32 = 260
+		rl.DrawTexturePro(
+			military_token_2_texture,
+			{0, 0, f32(military_token_2_texture.width), f32(military_token_2_texture.height)},
+			{
+				STARTING_WINDOW_WIDTH / 2 + factor * token_2_offset,
+				STARTING_WINDOW_HEIGHT / 2 + 248,
+				military_token_size.x,
+				military_token_size.y,
+			},
+			military_token_size / 2,
+			f32(90 * factor),
+			rl.WHITE,
+		)
+		rl.DrawTexturePro(
+			military_token_5_texture,
+			{0, 0, f32(military_token_5_texture.width), f32(military_token_5_texture.height)},
+			{
+				STARTING_WINDOW_WIDTH / 2 + factor * token_5_offset,
+				STARTING_WINDOW_HEIGHT / 2 + 248,
+				military_token_size.x,
+				military_token_size.y,
+			},
+			military_token_size / 2,
+			f32(90 * factor),
+			rl.WHITE,
+		)
+	}
+
+	conflict_pawn_size: [2]f32 = {36, 72}
+	rl.DrawTexturePro(
+		conflict_pawn_texture,
+		{0, 0, f32(conflict_pawn_texture.width), f32(conflict_pawn_texture.height)},
+		{
+			STARTING_WINDOW_WIDTH / 2,
+			STARTING_WINDOW_HEIGHT / 2 + 190,
+			conflict_pawn_size.x,
+			conflict_pawn_size.y,
+		},
+		conflict_pawn_size / 2,
+		0,
+		rl.WHITE,
+	)
+	token_diameter: f32 = 72
+	for token in 0 ..< 5 {
+		rl.DrawTexturePro(
+			progress_token_textures[.Economy],
+			{0, 0, 288, 288},
+			{
+				STARTING_WINDOW_WIDTH / 2 + (f32(token) - 2.0) * (token_diameter + 4.0),
+				STARTING_WINDOW_HEIGHT / 2 + 108,
+				token_diameter,
+				token_diameter,
+			},
+			{token_diameter / 2, token_diameter / 2},
+			180,
+			rl.WHITE,
+		)
+	}
+	coin_diameter: f32 = 120
+	coin_position: [2]f32 = {STARTING_WINDOW_WIDTH * 1 / 3, STARTING_WINDOW_HEIGHT * 3 / 4 + 100}
+	rl.DrawTexturePro(
+		coin_texture,
+		{0, 0, f32(coin_texture.width), f32(coin_texture.height)},
+		{coin_position.x, coin_position.y, coin_diameter, coin_diameter},
+		{coin_diameter / 2, coin_diameter / 2},
+		0,
+		rl.WHITE,
+	)
+	fontSize: i32 = 110
+	outlineSize: f32 = 4
+	offsets: [4][2]f32 = {
+		{-outlineSize, -outlineSize},
+		{outlineSize, -outlineSize},
+		{-outlineSize, outlineSize},
+		{outlineSize, outlineSize},
+	}
+	value: cstring = "7"
+	textWidth := rl.MeasureText(value, fontSize)
+	textPosition := coin_position - {f32(textWidth), f32(fontSize)} / 2
+	textColour := rl.WHITE
+	borderColour := rl.BLACK
+	for offset in offsets {
+		rl.DrawTextEx(font, value, textPosition - offset, f32(fontSize), 0, borderColour)
+	}
+	rl.DrawTextEx(font, value, textPosition, f32(fontSize), 0, textColour)
+
 	rl.EndMode2D()
 	rl.EndDrawing()
 }
@@ -293,8 +409,21 @@ main :: proc() {
 
 	window_setup()
 	card_atlases = load_object_atlases()
-	token_textures = load_progress_token_textures()
+	card_back_textures = load_card_back_textures()
+	progress_token_textures = load_progress_token_textures()
 	military_track_texture = rl.LoadTexture("images/military_track.png")
+	rl.SetTextureFilter(military_track_texture, .BILINEAR)
+	conflict_pawn_texture = rl.LoadTexture("images/conflict_pawn.png")
+	rl.SetTextureFilter(conflict_pawn_texture, .BILINEAR)
+	military_token_2_texture = rl.LoadTexture("images/military_2.png")
+	rl.SetTextureFilter(military_token_2_texture, .BILINEAR)
+	military_token_5_texture = rl.LoadTexture("images/military_5.png")
+	rl.SetTextureFilter(military_token_5_texture, .BILINEAR)
+	coin_texture = rl.LoadTexture("images/coin.png")
+	rl.SetTextureFilter(coin_texture, .BILINEAR)
+
+	font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
+
 	rounded_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
 
 	for !rl.WindowShouldClose() {
