@@ -2,7 +2,7 @@ package swd_engine
 
 Object :: struct {
 	age:                              Age,
-	kind:                             Object_Colour,
+	colour:                           Object_Colour,
 	cost:                             Object_Base_Cost,
 	coins_produced:                   int,
 	coins_per_object_produced:        Object_Kind_Count,
@@ -114,196 +114,201 @@ Object_Name :: enum {
 }
 
 objects_db: [Object_Name]Object = {
-	.Lumber_Yard = {age = .Age1, kind = .Brown, resources_produced = #partial{.Wood = 1}},
+	.Lumber_Yard = {age = .Age1, colour = .Brown, resources_produced = #partial{.Wood = 1}},
 	.Logging_Camp = {
 		age = .Age1,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 1},
 		resources_produced = #partial{.Wood = 1},
 	},
-	.Clay_Pool = {age = .Age1, kind = .Brown, resources_produced = #partial{.Clay = 1}},
+	.Clay_Pool = {age = .Age1, colour = .Brown, resources_produced = #partial{.Clay = 1}},
 	.Clay_Pit = {
 		age = .Age1,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 1},
 		resources_produced = #partial{.Clay = 1},
 	},
-	.Quarry = {kind = .Brown, resources_produced = #partial{.Stone = 1}, age = .Age1},
+	.Quarry = {colour = .Brown, resources_produced = #partial{.Stone = 1}, age = .Age1},
 	.Stone_Pit = {
 		age = .Age1,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 1},
 		resources_produced = #partial{.Stone = 1},
 	},
 	.Glassworks = {
 		age = .Age1,
-		kind = .Grey,
+		colour = .Grey,
 		cost = {coins = 1},
 		resources_produced = #partial{.Glass = 1},
 	},
 	.Press = {
 		age = .Age1,
-		kind = .Grey,
+		colour = .Grey,
 		cost = {coins = 1},
 		resources_produced = #partial{.Papyrus = 1},
 	},
-	.Guard_Tower = {age = .Age1, kind = .Red, military_produced = 1},
+	.Guard_Tower = {age = .Age1, colour = .Red, military_produced = 1},
 	.Workshop = {
 		age = .Age1,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Papyrus = 1}},
 		science_symbol_produced = .Frame,
 		vp_produced = 1,
 	},
 	.Apothecary = {
 		age = .Age1,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Glass = 1}},
 		science_symbol_produced = .Wheel,
 		vp_produced = 1,
 	},
 	.Stone_Reserve = {
 		age = .Age1,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 3},
 		fixed_cost_resource_produced = {.Stone},
 	},
 	.Clay_Reserve = {
 		age = .Age1,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 3},
 		fixed_cost_resource_produced = {.Clay},
 	},
 	.Wood_Reserve = {
 		age = .Age1,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 3},
 		fixed_cost_resource_produced = {.Wood},
 	},
 	.Stable = {
 		age = .Age1,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Wood = 1}},
 		military_produced = 1,
 		linking_symbol_produced = .Stable,
 	},
 	.Garrison = {
 		age = .Age1,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Clay = 1}},
 		military_produced = 1,
 		linking_symbol_produced = .Garrison,
 	},
 	.Palisade = {
 		age = .Age1,
-		kind = .Red,
+		colour = .Red,
 		cost = {coins = 2},
 		military_produced = 1,
 		linking_symbol_produced = .Palisade,
 	},
 	.Scriptorium = {
 		age = .Age1,
-		kind = .Green,
+		colour = .Green,
 		cost = {coins = 2},
 		science_symbol_produced = .Quill,
 		linking_symbol_produced = .Scriptorium,
 	},
 	.Pharmacist = {
 		age = .Age1,
-		kind = .Green,
+		colour = .Green,
 		cost = {coins = 2},
 		science_symbol_produced = .Mortar_And_Pestle,
 		linking_symbol_produced = .Pharmacist,
 	},
-	.Theatre = {age = .Age1, kind = .Blue, vp_produced = 3, linking_symbol_produced = .Theatre},
-	.Altar = {age = .Age1, kind = .Blue, vp_produced = 3, linking_symbol_produced = .Altar},
+	.Theatre = {age = .Age1, colour = .Blue, vp_produced = 3, linking_symbol_produced = .Theatre},
+	.Altar = {age = .Age1, colour = .Blue, vp_produced = 3, linking_symbol_produced = .Altar},
 	.Baths = {
 		age = .Age1,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Stone = 1}},
 		vp_produced = 3,
 		linking_symbol_produced = .Baths,
 	},
-	.Tavern = {age = .Age1, kind = .Yellow, coins_produced = 4, linking_symbol_produced = .Tavern},
+	.Tavern = {
+		age = .Age1,
+		colour = .Yellow,
+		coins_produced = 4,
+		linking_symbol_produced = .Tavern,
+	},
 	.Sawmill = {
 		age = .Age2,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 2},
 		resources_produced = #partial{.Wood = 2},
 	},
 	.Brickyard = {
 		age = .Age2,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 2},
 		resources_produced = #partial{.Clay = 2},
 	},
 	.Shelf_Quarry = {
 		age = .Age2,
-		kind = .Brown,
+		colour = .Brown,
 		cost = {coins = 2},
 		resources_produced = #partial{.Stone = 2},
 	},
-	.Glassblower = {age = .Age2, kind = .Grey, resources_produced = #partial{.Glass = 1}},
-	.Drying_Room = {age = .Age2, kind = .Grey, resources_produced = #partial{.Papyrus = 1}},
+	.Glassblower = {age = .Age2, colour = .Grey, resources_produced = #partial{.Glass = 1}},
+	.Drying_Room = {age = .Age2, colour = .Grey, resources_produced = #partial{.Papyrus = 1}},
 	.Walls = {
 		age = .Age2,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Stone = 2}},
 		military_produced = 2,
 	},
 	.Forum = {
 		age = .Age2,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 3, resources = #partial{.Clay = 1}},
 		variable_grey_resource_produced = 1,
 	},
 	.Caravansery = {
 		age = .Age2,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 2, resources = #partial{.Glass = 1, .Papyrus = 1}},
 		variable_brown_resource_produced = 1,
 	},
 	.Customs_House = {
 		age = .Age2,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {coins = 4},
 		fixed_cost_resource_produced = #partial{.Glass, .Papyrus},
 	},
 	.Courthouse = {
 		age = .Age2,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Wood = 2, .Glass = 1}},
 		vp_produced = 5,
 	},
 	.Horse_Breeders = {
 		age = .Age2,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Clay = 1, .Wood = 1}, free_construction_symbol = .Stable},
 		military_produced = 1,
 	},
 	.Barracks = {
 		age = .Age2,
-		kind = .Red,
+		colour = .Red,
 		cost = {coins = 3, free_construction_symbol = .Garrison},
 		military_produced = 1,
 	},
 	.Archery_Range = {
 		age = .Age2,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Stone = 1, .Wood = 1, .Papyrus = 1}},
 		military_produced = 2,
 		linking_symbol_produced = .Archery_Range,
 	},
 	.Parade_Ground = {
 		age = .Age2,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Clay = 2, .Glass = 1}},
 		military_produced = 2,
 		linking_symbol_produced = .Parade_Ground,
 	},
 	.Library = {
 		age = .Age2,
-		kind = .Green,
+		colour = .Green,
 		cost = {
 			resources = #partial{.Stone = 1, .Wood = 1, .Glass = 1},
 			free_construction_symbol = .Scriptorium,
@@ -313,7 +318,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Dispensary = {
 		age = .Age2,
-		kind = .Green,
+		colour = .Green,
 		cost = {
 			resources = #partial{.Clay = 2, .Stone = 1},
 			free_construction_symbol = .Pharmacist,
@@ -323,7 +328,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.School = {
 		age = .Age2,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Wood = 1, .Papyrus = 2}},
 		vp_produced = 1,
 		science_symbol_produced = .Wheel,
@@ -331,7 +336,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Laboratory = {
 		age = .Age2,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Wood = 1, .Glass = 2}},
 		vp_produced = 1,
 		science_symbol_produced = .Frame,
@@ -339,100 +344,100 @@ objects_db: [Object_Name]Object = {
 	},
 	.Statue = {
 		age = .Age2,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Clay = 2}, free_construction_symbol = .Theatre},
 		vp_produced = 4,
 		linking_symbol_produced = .Statue,
 	},
 	.Temple = {
 		age = .Age2,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Wood = 1, .Papyrus = 1}, free_construction_symbol = .Altar},
 		vp_produced = 4,
 		linking_symbol_produced = .Temple,
 	},
 	.Aqueduct = {
 		age = .Age2,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Stone = 3}, free_construction_symbol = .Baths},
 		vp_produced = 5,
 	},
 	.Rostrum = {
 		age = .Age2,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Stone = 1, .Wood = 1}},
 		vp_produced = 4,
 		linking_symbol_produced = .Rostrum,
 	},
 	.Brewery = {
 		age = .Age2,
-		kind = .Yellow,
+		colour = .Yellow,
 		coins_produced = 6,
 		linking_symbol_produced = .Brewery,
 	},
 	.Arsenal = {
 		age = .Age3,
-		kind = .Red,
+		colour = .Red,
 		cost = {resources = #partial{.Clay = 3, .Wood = 2}},
 		military_produced = 3,
 	},
-	.Pretorium = {age = .Age3, kind = .Red, cost = {coins = 8}, military_produced = 3},
+	.Pretorium = {age = .Age3, colour = .Red, cost = {coins = 8}, military_produced = 3},
 	.Academy = {
 		age = .Age3,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Stone = 1, .Wood = 1, .Glass = 2}},
 		vp_produced = 3,
 		science_symbol_produced = .Sundial,
 	},
 	.Study = {
 		age = .Age3,
-		kind = .Green,
+		colour = .Green,
 		cost = {resources = #partial{.Wood = 1, .Glass = 1, .Papyrus = 2}},
 		vp_produced = 3,
 		science_symbol_produced = .Sundial,
 	},
 	.Chamber_of_Commerce = {
 		age = .Age3,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {resources = #partial{.Papyrus = 2}},
 		vp_produced = 3,
 		coins_per_object_produced = #partial{.Grey = 3},
 	},
 	.Port = {
 		age = .Age3,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {resources = #partial{.Wood = 1, .Glass = 1, .Papyrus = 1}},
 		vp_produced = 3,
 		coins_per_object_produced = #partial{.Brown = 3},
 	},
 	.Armory = {
 		age = .Age3,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {resources = #partial{.Stone = 2, .Glass = 1}},
 		vp_produced = 3,
 		coins_per_object_produced = #partial{.Red = 1},
 	},
 	.Palace = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Clay = 1, .Stone = 1, .Wood = 1, .Glass = 2}},
 		vp_produced = 7,
 	},
 	.Town_Hall = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Stone = 3, .Wood = 2}},
 		vp_produced = 7,
 	},
 	.Obelisk = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Stone = 2, .Glass = 1}},
 		vp_produced = 5,
 	},
 	.Fortifications = {
 		age = .Age3,
-		kind = .Red,
+		colour = .Red,
 		cost = {
 			resources = #partial{.Stone = 2, .Clay = 1, .Papyrus = 1},
 			free_construction_symbol = .Palisade,
@@ -441,7 +446,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Siege_Workshop = {
 		age = .Age3,
-		kind = .Red,
+		colour = .Red,
 		cost = {
 			resources = #partial{.Wood = 3, .Glass = 1},
 			free_construction_symbol = .Archery_Range,
@@ -450,7 +455,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Circus = {
 		age = .Age3,
-		kind = .Red,
+		colour = .Red,
 		cost = {
 			resources = #partial{.Clay = 2, .Stone = 2},
 			free_construction_symbol = .Parade_Ground,
@@ -459,7 +464,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.University = {
 		age = .Age3,
-		kind = .Green,
+		colour = .Green,
 		cost = {
 			resources = #partial{.Clay = 1, .Glass = 1, .Papyrus = 1},
 			free_construction_symbol = .School,
@@ -469,7 +474,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Observatory = {
 		age = .Age3,
-		kind = .Green,
+		colour = .Green,
 		cost = {
 			resources = #partial{.Stone = 1, .Papyrus = 2},
 			free_construction_symbol = .Laboratory,
@@ -479,13 +484,13 @@ objects_db: [Object_Name]Object = {
 	},
 	.Gardens = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {resources = #partial{.Clay = 2, .Wood = 2}, free_construction_symbol = .Statue},
 		vp_produced = 6,
 	},
 	.Pantheon = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {
 			resources = #partial{.Clay = 1, .Wood = 1, .Papyrus = 2},
 			free_construction_symbol = .Temple,
@@ -494,7 +499,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Senate = {
 		age = .Age3,
-		kind = .Blue,
+		colour = .Blue,
 		cost = {
 			resources = #partial{.Clay = 2, .Stone = 1, .Papyrus = 1},
 			free_construction_symbol = .Rostrum,
@@ -503,14 +508,14 @@ objects_db: [Object_Name]Object = {
 	},
 	.Lighthouse = {
 		age = .Age3,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {resources = #partial{.Clay = 2, .Glass = 1}, free_construction_symbol = .Tavern},
 		coins_per_object_produced = #partial{.Yellow = 1},
 		vp_produced = 3,
 	},
 	.Arena = {
 		age = .Age3,
-		kind = .Yellow,
+		colour = .Yellow,
 		cost = {
 			resources = #partial{.Clay = 1, .Stone = 1, .Wood = 1},
 			free_construction_symbol = .Brewery,
@@ -521,48 +526,48 @@ objects_db: [Object_Name]Object = {
 	.Merchants_Guild = {
 		guild = .Merchants_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Clay = 1, .Wood = 1, .Glass = 1, .Papyrus = 1}},
 	},
 	.Shipowners_Guild = {
 		guild = .Shipowners_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Clay = 1, .Stone = 1, .Glass = 1, .Papyrus = 1}},
 	},
 	.Builders_Guild = {
 		guild = .Builders_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Clay = 1, .Wood = 1, .Glass = 1}},
 	},
 	.Magistrates_Guild = {
 		guild = .Magistrates_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Wood = 2, .Clay = 1, .Papyrus = 1}},
 	},
 	.Scientists_Guild = {
 		guild = .Scientists_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Clay = 2, .Wood = 2}},
 	},
 	.Moneylenders_Guild = {
 		guild = .Moneylenders_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Wood = 2}},
 	},
 	.Tacticians_Guild = {
 		guild = .Tacticians_Guild,
 		age = .Age3,
-		kind = .Purple,
+		colour = .Purple,
 		cost = {resources = #partial{.Stone = 2, .Clay = 1, .Papyrus = 1}},
 	},
 	.The_Appian_Way = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Clay = 2, .Stone = 2}},
 		coins_produced = 3,
 		coins_destroyed = 3,
@@ -571,28 +576,28 @@ objects_db: [Object_Name]Object = {
 	},
 	.The_Great_Lighthouse = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 2, .Stone = 1, .Wood = 1}},
 		variable_brown_resource_produced = 1,
 		vp_produced = 4,
 	},
 	.The_Sphinx = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Glass = 2, .Clay = 1, .Stone = 1}},
 		vp_produced = 6,
 		go_again = true,
 	},
 	.The_Mausoleum = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 2, .Clay = 2}},
 		vp_produced = 2,
 		revive_card = true,
 	},
 	.The_Statue_of_Zeus = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 2, .Clay = 1, .Wood = 1, .Stone = 1}},
 		military_produced = 1,
 		vp_produced = 3,
@@ -600,7 +605,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Circus_Maximus = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Glass = 1, .Wood = 1, .Stone = 2}},
 		military_produced = 1,
 		vp_produced = 3,
@@ -608,7 +613,7 @@ objects_db: [Object_Name]Object = {
 	},
 	.Piraeus = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Clay = 1, .Stone = 1, .Wood = 2}},
 		variable_grey_resource_produced = 1,
 		vp_produced = 2,
@@ -616,20 +621,20 @@ objects_db: [Object_Name]Object = {
 	},
 	.The_Pyramids = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Stone = 3}},
 		vp_produced = 9,
 	},
 	.The_Temple_of_Artemis = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Stone = 1, .Wood = 1}},
 		coins_produced = 9,
 		go_again = true,
 	},
 	.The_Hanging_Gardens = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Wood = 2}},
 		coins_produced = 6,
 		vp_produced = 3,
@@ -637,14 +642,14 @@ objects_db: [Object_Name]Object = {
 	},
 	.The_Great_Library = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Papyrus = 1, .Glass = 1, .Wood = 3}},
 		vp_produced = 4,
 		gain_unavailable_progress_token = true,
 	},
 	.The_Colossus = {
 		age = .DraftWonders,
-		kind = .Wonder,
+		colour = .Wonder,
 		cost = {resources = #partial{.Glass = 1, .Clay = 3}},
 		military_produced = 2,
 		vp_produced = 3,
@@ -682,7 +687,7 @@ get_all_age3_non_guild_card_names :: proc() -> [20]Object_Name {
 	idx: int = 0
 	for card in Object_Name {
 		if (idx >= 20) {return names}
-		if (objects_db[card].age == .Age3) {
+		if (objects_db[card].age == .Age3 && objects_db[card].colour != .Purple) {
 			names[idx] = card
 			idx += 1
 		}
@@ -695,7 +700,7 @@ get_all_guild_card_names :: proc() -> [7]Object_Name {
 	idx: int = 0
 	for card in Object_Name {
 		if (idx >= 7) {return names}
-		if (objects_db[card].kind == .Purple) {
+		if (objects_db[card].colour == .Purple) {
 			names[idx] = card
 			idx += 1
 		}
@@ -708,7 +713,7 @@ get_all_wonder_names :: proc() -> [12]Object_Name {
 	idx: int = 0
 	for card in Object_Name {
 		if (idx >= 12) {return names}
-		if (objects_db[card].kind == .Wonder) {
+		if (objects_db[card].colour == .Wonder) {
 			names[idx] = card
 			idx += 1
 		}

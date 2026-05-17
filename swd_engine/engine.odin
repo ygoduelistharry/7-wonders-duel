@@ -1,7 +1,6 @@
 package swd_engine
 
 import "core:math/bits"
-// import linalg "core:math/linalg"
 import "core:math/rand"
 import "core:slice"
 import "core:time"
@@ -235,7 +234,7 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 	copy(all_selected_age3_cards[17:], guild_cards[:3])
 	append(&new_game.cards_unavailable, ..guild_cards[3:])
 
-	rand.shuffle(all_selected_age3_cards[:])
+	rand.shuffle(all_selected_age3_cards[:], rng)
 	for card, idx in all_selected_age3_cards {new_game.boards[.Age3][idx].card_in_slot = card}
 
 
@@ -314,8 +313,8 @@ calculate_object_cost :: proc(
 
 	// do an early check for masonry and architecture
 	total_extra_res_required := extra_brown_res_required + extra_grey_res_required
-	if (object.kind == .Blue && .Masonry in player.progress_tokens) ||
-	   (object.kind == .Wonder && .Architechture in player.progress_tokens) {
+	if (object.colour == .Blue && .Masonry in player.progress_tokens) ||
+	   (object.colour == .Wonder && .Architechture in player.progress_tokens) {
 		total_extra_res_required -= 2
 	}
 	// if we can cover our production without considering trading then we are done. if not...
@@ -497,7 +496,7 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	case .Choose_Brown_Card_To_Destroy:
 		{
 			for card, idx in opponent.cards_constructed {
-				if objects_db[card].kind == .Brown {
+				if objects_db[card].colour == .Brown {
 					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
 				}
 			}
@@ -505,7 +504,7 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	case .Choose_Grey_Card_To_Destroy:
 		{
 			for card, idx in opponent.cards_constructed {
-				if objects_db[card].kind == .Grey {
+				if objects_db[card].colour == .Grey {
 					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
 				}
 			}
@@ -593,13 +592,13 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player := &game.player_states[player_id]
 	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
 
-	if object.kind == .Wonder {
+	if object.colour == .Wonder {
 		append(&player.wonders_constructed, object_name)
 
 	} else {
 		append(&player.cards_constructed, object_name)
 	}
-	player.object_kind_count_owned[object.kind] += 1
+	player.object_kind_count_owned[object.colour] += 1
 
 	coin_gain :=
 		object.coins_produced +
@@ -608,7 +607,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	   object.cost.free_construction_symbol in player.linking_symbols {
 		coin_gain += 4
 	}
-	if object.kind == .Purple {
+	if object.colour == .Purple {
 		_, coin_from_guild := get_guild_value(object.guild, player_id, game^)
 		coin_gain += coin_from_guild
 	}
@@ -616,7 +615,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player.coins += coin_gain
 
 	player.resource_production += object.resources_produced
-	if object.kind == .Brown || object.kind == .Grey {
+	if object.colour == .Brown || object.colour == .Grey {
 		for &value, resource in opponent.resource_trade_price {
 			if value != 1 {
 				value += object.resources_produced[resource]
@@ -631,7 +630,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player.variable_brown_resource_production += object.variable_brown_resource_produced
 	player.variable_grey_resource_production += object.variable_grey_resource_produced
 
-	if object.kind == .Blue {
+	if object.colour == .Blue {
 		player.fixed_vp_from_blue += object.vp_produced
 	} else {
 		player.fixed_vp_from_other += object.vp_produced
@@ -639,7 +638,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 
 	player.linking_symbols |= {object.linking_symbol_produced}
 
-	if object.kind == .Red {
+	if object.colour == .Red {
 		game.military_track += int(player_id) * object.military_produced
 		if .Strategy in player.progress_tokens {
 			game.military_track += int(player_id)
@@ -682,7 +681,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	}
 
 	// Wonder specific effects
-	if object.go_again || (.Theology in player.progress_tokens && object.kind == .Wonder) {
+	if object.go_again || (.Theology in player.progress_tokens && object.colour == .Wonder) {
 		game.go_again_active = true
 	}
 	if object.gain_unavailable_progress_token {game.next_choice_state = .Choose_Unavailable_Progress_Token}
@@ -862,7 +861,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				unordered_remove(&opponent.cards_constructed, move_data.card_idx)
 				append(&game.cards_discarded, move_data.card_name)
 				card_data := objects_db[move_data.card_name]
-				opponent.object_kind_count_owned[card_data.kind] -= 1
+				opponent.object_kind_count_owned[card_data.colour] -= 1
 				opponent.resource_production -= card_data.resources_produced
 			}
 		}
