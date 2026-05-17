@@ -24,6 +24,9 @@ window_setup :: proc() {
 }
 
 handle_input :: proc(game: ^swd.Game) {
+	if rl.IsKeyReleased(.Q) {
+		testAge = .DraftWonders
+	}
 	if rl.IsKeyReleased(.W) {
 		testAge = .Age1
 	}
@@ -116,7 +119,7 @@ draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
 	if age == .DraftWonders {
 		for wonder, i in game.wonders_to_draft {
 			if i in game.wonder_ids_draftable {
-				grid_pos: [2]int
+				grid_pos: [2]f32
 				switch i % 4 {
 				case 0:
 					{grid_pos = {-1, -1}}
@@ -127,7 +130,8 @@ draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
 				case 3:
 					{grid_pos = {1, 1}}
 				}
-
+				position := midpoint + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
+				draw_card_texture(wonder, position, WONDER_SIZE)
 			} else {continue}
 		}
 	} else {
