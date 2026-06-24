@@ -6,7 +6,7 @@ import "core:slice"
 import "core:time"
 
 Science_Symbol :: enum u8 {
-	Astrolabe = 1,
+	Astrolabe,
 	Scales,
 	Sundial,
 	Mortar_And_Pestle,
@@ -14,10 +14,9 @@ Science_Symbol :: enum u8 {
 	Quill,
 	Wheel,
 }
-Science_Symbol_Count :: [Science_Symbol]int
 
 Progress_Token :: enum u16 {
-	Agriculture = 1,
+	Agriculture,
 	Architechture,
 	Economy,
 	Law,
@@ -31,7 +30,7 @@ Progress_Token :: enum u16 {
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
 
 Linking_Symbol :: enum u32 {
-	Stable = 1,
+	Stable,
 	Garrison,
 	Palisade,
 	Archery_Range,
@@ -52,7 +51,7 @@ Linking_Symbol :: enum u32 {
 Linking_Symbols :: distinct bit_set[Linking_Symbol;u32]
 
 Military_Token :: enum u8 {
-	P1_2 = 1,
+	P1_2,
 	P1_5,
 	P2_2,
 	P2_5,
@@ -60,7 +59,7 @@ Military_Token :: enum u8 {
 Military_Tokens :: distinct bit_set[Military_Token;u8]
 
 Object_Colour :: enum u8 {
-	Brown = 1,
+	Brown,
 	Grey,
 	Yellow,
 	Green,
@@ -97,14 +96,13 @@ Resource :: enum u8 {
 	Papyrus,
 }
 Resources :: distinct bit_set[Resource;u8]
-Resource_Count :: [Resource]int
 Resource_Key_Value_Pair :: struct {
 	resource: Resource,
 	value:    int,
 }
 brown_resources: Resources = {.Clay, .Stone, .Wood}
 grey_resources: Resources = {.Glass, .Papyrus}
-resource_dot_product :: proc(r1, r2: Resource_Count) -> (sum: int) {
+resource_dot_product :: proc(r1, r2: [Resource]int) -> (sum: int) {
 	for resource in Resource {
 		sum += r1[resource] * r2[resource]
 	}
@@ -119,7 +117,7 @@ dot :: proc {
 
 Object_Base_Cost :: struct {
 	coins:                    int,
-	resources:                Resource_Count,
+	resources:                [Resource]int,
 	free_construction_symbol: Linking_Symbol,
 }
 
@@ -131,12 +129,12 @@ Player_State :: struct {
 	object_kind_count_owned:            Object_Kind_Count,
 	player_id:                          Player_ID,
 	coins:                              int,
-	resource_production:                Resource_Count,
-	resource_trade_price:               Resource_Count,
+	resource_production:                [Resource]int,
+	resource_trade_price:               [Resource]int,
 	variable_brown_resource_production: int,
 	variable_grey_resource_production:  int,
 	progress_tokens:                    Progress_Tokens,
-	science_symbols:                    Science_Symbol_Count,
+	science_symbols:                    [Science_Symbol]int,
 	unique_science_symbols:             int,
 	linking_symbols:                    Linking_Symbols,
 	fixed_vp_from_blue:                 int,
@@ -298,7 +296,7 @@ calculate_object_cost :: proc(
 	// this is effectively just brown and grey buildings
 	// we also split the resource deficit into brown and grey to account for "varaible" resource production.
 	extra_brown_res_required, extra_grey_res_required: int
-	extra_res_required: Resource_Count
+	extra_res_required: [Resource]int
 	for &value, resource in extra_res_required {
 		value = max(0, object.cost.resources[resource] - player.resource_production[resource])
 		if resource in brown_resources {extra_brown_res_required += value}
@@ -636,7 +634,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		player.fixed_vp_from_other += object.vp_produced
 	}
 
-	player.linking_symbols |= {object.linking_symbol_produced}
+	if symbol, ok := object.linking_symbol_produced.?; ok {player.linking_symbols |= {symbol}}
 
 	if object.colour == .Red {
 		game.military_track += int(player_id) * object.military_produced
@@ -667,17 +665,19 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 
 
 	// Check for science events
-	player.science_symbols[object.science_symbol_produced] += 1
-	if player.science_symbols[object.science_symbol_produced] == 1 {
-		player.unique_science_symbols += 1
-		if player.unique_science_symbols >= 6 {
-			game.completed = true
-			game.winner = player_id
-			return
-		}
-	}
-	if player.science_symbols[object.science_symbol_produced] == 2 {
-		game.next_choice_state = .Choose_Progress_Token
+	if symbol, ok := object.science_symbol_produced.?; ok {
+    	player.science_symbols[symbol] += 1
+    	if player.science_symbols[symbol] == 1 {
+    		player.unique_science_symbols += 1
+    		if player.unique_science_symbols >= 6 {
+    			game.completed = true
+    			game.winner = player_id
+    			return
+    		}
+    	}
+    	if player.science_symbols[symbol] == 2 {
+    		game.next_choice_state = .Choose_Progress_Token
+    	}
 	}
 
 	// Wonder specific effects
