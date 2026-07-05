@@ -68,8 +68,7 @@ Object_Colour :: enum u8 {
 	Purple,
 	Wonder,
 }
-Object_Kind_Count :: [Object_Colour]int
-object_kind_dot_product :: proc(r1, r2: Object_Kind_Count) -> int {
+object_kind_dot_product :: proc(r1, r2: [Object_Colour]int) -> int {
 	sum: int
 	for object in Object_Colour {
 		sum += r1[object] * r2[object]
@@ -126,7 +125,7 @@ Player_State :: struct {
 	wonders_constructed:                [dynamic; 4]Object_Name,
 	cards_tucked:                       [dynamic; 4]Object_Name,
 	wonders_available:                  [dynamic; 4]Object_Name,
-	object_kind_count_owned:            Object_Kind_Count,
+	object_kind_count_owned:            [Object_Colour]int,
 	player_id:                          Player_ID,
 	coins:                              int,
 	resource_production:                [Resource]int,
@@ -666,18 +665,18 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 
 	// Check for science events
 	if symbol, ok := object.science_symbol_produced.?; ok {
-    	player.science_symbols[symbol] += 1
-    	if player.science_symbols[symbol] == 1 {
-    		player.unique_science_symbols += 1
-    		if player.unique_science_symbols >= 6 {
-    			game.completed = true
-    			game.winner = player_id
-    			return
-    		}
-    	}
-    	if player.science_symbols[symbol] == 2 {
-    		game.next_choice_state = .Choose_Progress_Token
-    	}
+		player.science_symbols[symbol] += 1
+		if player.science_symbols[symbol] == 1 {
+			player.unique_science_symbols += 1
+			if player.unique_science_symbols >= 6 {
+				game.completed = true
+				game.winner = player_id
+				return
+			}
+		}
+		if player.science_symbols[symbol] == 2 {
+			game.next_choice_state = .Choose_Progress_Token
+		}
 	}
 
 	// Wonder specific effects
@@ -913,3 +912,4 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	}
 }
+

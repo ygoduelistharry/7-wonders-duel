@@ -23,6 +23,26 @@ window_setup :: proc() {
 	camera.zoom = 1
 }
 
+UIElementKind :: enum {
+	GameObject,
+	ScienceToken,
+	Visual,
+}
+UIElement :: struct {
+	kind:             UIElementKind,
+	game_object:      Maybe(swd.Object),
+	science_symbol:   Maybe(swd.Science_Symbol),
+	texture:          rl.Texture2D,
+	sub_texture_rect: rl.Rectangle,
+	size:             [2]f32,
+	position:         [2]f32,
+	depth:            f32,
+	hoverable:        bool,
+	clickable:        bool,
+}
+
+UIState :: enum {}
+
 handle_input :: proc(game: ^swd.Game) {
 	if rl.IsKeyReleased(.Q) {
 		testAge = .DraftWonders
@@ -369,3 +389,4 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 }
+

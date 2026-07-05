@@ -5,7 +5,7 @@ Object :: struct {
 	colour:                           Object_Colour,
 	cost:                             Object_Base_Cost,
 	coins_produced:                   int,
-	coins_per_object_produced:        Object_Kind_Count,
+	coins_per_object_produced:        [Object_Colour]int,
 	resources_produced:               [Resource]int,
 	variable_brown_resource_produced: int,
 	variable_grey_resource_produced:  int,
@@ -720,3 +720,4 @@ get_all_wonder_names :: proc() -> [12]Object_Name {
 	}
 	return names
 }
+
