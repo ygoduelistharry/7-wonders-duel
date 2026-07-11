@@ -1,9 +1,12 @@
 package seven_wonders_duel
 
+import hm "core:container/handle_map"
 import "core:fmt"
 import "core:mem"
 import swd "swd_engine"
 import rl "vendor:raylib"
+
+Handle :: hm.Handle32
 
 STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1920, 1080
 get_screen_centre :: proc() -> [2]f32 {
@@ -23,25 +26,40 @@ window_setup :: proc() {
 	camera.zoom = 1
 }
 
-UIElementKind :: enum {
-	GameObject,
-	ScienceToken,
+MAX_UI_ELEMENTS :: 256
+UILabels :: enum {
 	Visual,
+	GameObject,
+	ScienceSymbol,
+	ShowDiscard,
+	ShowLog,
+	ShowMenu,
 }
 UIElement :: struct {
-	kind:             UIElementKind,
-	game_object:      Maybe(swd.Object),
-	science_symbol:   Maybe(swd.Science_Symbol),
+	handle:           Handle,
+	label:            UILabels,
 	texture:          rl.Texture2D,
 	sub_texture_rect: rl.Rectangle,
-	size:             [2]f32,
-	position:         [2]f32,
+	hitbox_size:      [2]f32,
+	texture_size:     [2]f32,
+	centre_position:  [2]f32,
 	depth:            f32,
-	hoverable:        bool,
+	visible:          bool,
 	clickable:        bool,
+	game_object:      Maybe(swd.Object),
+	science_symbol:   Maybe(swd.Science_Symbol),
 }
 
-UIState :: enum {}
+UIState :: struct {
+	game:               ^swd.Game,
+	ui_elements:        hm.Static_Handle_Map(MAX_UI_ELEMENTS, UIElement, Handle),
+	discard_visible:    bool,
+	log_visible:        bool,
+	hovered_last_frame: Handle,
+	clicked_last_frame: Handle,
+	draw_order:         [dynamic; MAX_UI_ELEMENTS]Handle,
+	draw_order_dirty:   bool,
+}
 
 handle_input :: proc(game: ^swd.Game) {
 	if rl.IsKeyReleased(.Q) {
@@ -389,4 +407,3 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 }
-

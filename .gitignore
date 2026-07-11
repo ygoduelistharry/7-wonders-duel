@@ -10,3 +10,5 @@ seven_wonders_duel/swd_fsm.py
 build/
 *.exe
 *.pdb
+7-wonders-duel
+*debug*
