@@ -912,4 +912,3 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	}
 }
-
