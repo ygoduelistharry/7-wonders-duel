@@ -141,6 +141,17 @@ Player_State :: struct {
 	guilds_built:                       Guilds,
 }
 
+get_all_player_wonders :: proc(player: Player_State) -> [dynamic; 4]Object_Name {
+	all_wonders: [dynamic; 4]Object_Name
+	for wonder in player.wonders_constructed {
+		append(&all_wonders, wonder)
+	}
+	for wonder in player.wonders_available {
+		append(&all_wonders, wonder)
+	}
+	return all_wonders
+}
+
 Player_ID :: enum i8 {
 	P1 = -1,
 	P2 = 1,
@@ -148,7 +159,7 @@ Player_ID :: enum i8 {
 other_player_id :: proc(player_id: Player_ID) -> Player_ID {return Player_ID(-1 * int(player_id))}
 
 Age :: enum u8 {
-	DraftWonders = 1,
+	DraftWonders,
 	Age1,
 	Age2,
 	Age3,
@@ -357,39 +368,8 @@ calculate_object_cost :: proc(
 }
 
 
-Draft_Wonder :: struct {
-	wonder_name: Object_Name,
-	wonder_idx:  int,
-}
-Construct_Card :: struct {
-	card_name: Object_Name,
-	slot_idx:  int,
-	cost:      Object_Real_Cost,
-}
-Construct_Wonder :: struct {
-	wonder_name: Object_Name,
-	wonder_idx:  int,
-	cost:        Object_Real_Cost,
-	card_name:   Object_Name,
-	slot_idx:    int,
-}
-Discard_For_Coins :: struct {
-	card_name: Object_Name,
-	slot_idx:  int,
-}
-Select_Progress_Token :: struct {
-	token:     Progress_Token,
-	token_idx: int,
-}
-Select_Card :: struct {
-	card_name: Object_Name,
-	card_idx:  int,
-}
-Select_Player :: struct {
-	chosen_player: Player_ID,
-}
-
-Move_Data :: union {
+Move_Kind :: enum {
+	None,
 	Draft_Wonder,
 	Construct_Card,
 	Construct_Wonder,
@@ -400,9 +380,18 @@ Move_Data :: union {
 }
 
 Move :: struct {
-	move_data:     Move_Data,
 	choice_state:  Choice_State,
 	acting_player: Player_ID,
+	move_kind:     Move_Kind,
+	wonder_name:   Maybe(Object_Name),
+	wonder_idx:    Maybe(int),
+	card_name:     Maybe(Object_Name),
+	slot_idx:      Maybe(int),
+	cost:          Maybe(Object_Real_Cost),
+	token:         Maybe(Progress_Token),
+	token_idx:     Maybe(int),
+	card_idx:      Maybe(int),
+	chosen_player: Maybe(Player_ID),
 }
 
 get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
@@ -417,20 +406,24 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		{
 			for idx in game.wonder_ids_draftable {
 				wonder := game.wonders_to_draft[idx]
-				append(&valid_moves, Move{move_data = Draft_Wonder{wonder, idx}})
+				append(
+					&valid_moves,
+					Move{move_kind = .Draft_Wonder, wonder_name = wonder, wonder_idx = idx},
+				)
 			}
 		}
 	case .Choose_Object_To_Construct_Or_Discard:
 		{
 			// get all constructable wonders if 7 haven't been built yet
-			constructable_wonder_data: [dynamic; 4]Construct_Wonder
+			base_wonder_moves: [dynamic; 4]Move
 			if len(turn_player.wonders_constructed) + len(opponent.wonders_constructed) < 7 {
 				for wonder, idx in turn_player.wonders_available {
 					wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
 					if wonder_cost.total_coin_cost <= turn_player.coins {
 						append(
-							&constructable_wonder_data,
-							Construct_Wonder {
+							&base_wonder_moves,
+							Move {
+								move_kind = .Construct_Wonder,
 								wonder_name = wonder,
 								wonder_idx = idx,
 								cost = wonder_cost,
@@ -446,28 +439,31 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 					// add moves to discard for coins
 					append(
 						&valid_moves,
-						Move{move_data = Discard_For_Coins{slot.card_in_slot, slot.id}},
+						Move {
+							move_kind = .Discard_For_Coins,
+							card_name = slot.card_in_slot,
+							slot_idx = slot.id,
+						},
 					)
-					// add moves to construct wonders
-					for data in constructable_wonder_data {
-						wonder_data: Construct_Wonder = {
-							wonder_name = data.wonder_name,
-							wonder_idx  = data.wonder_idx,
-							cost        = data.cost,
-							card_name   = slot.card_in_slot,
-							slot_idx    = slot.id,
-						}
-						append(&valid_moves, Move{move_data = wonder_data})
-					}
 					// add moves to construct cards
 					card_cost := calculate_object_cost(slot.card_in_slot, turn_player_id, game)
 					if card_cost.total_coin_cost <= turn_player.coins {
 						append(
 							&valid_moves,
 							Move {
-								move_data = Construct_Card{slot.card_in_slot, slot.id, card_cost},
+								move_kind = .Construct_Card,
+								card_name = slot.card_in_slot,
+								slot_idx = slot.id,
+								cost = card_cost,
 							},
 						)
+					}
+					// add moves to construct wonders
+					for base_wonder_move in base_wonder_moves {
+						wonder_move := base_wonder_move
+						wonder_move.card_name = slot.card_in_slot
+						wonder_move.slot_idx = slot.id
+						append(&valid_moves, wonder_move)
 					}
 				}
 			}
@@ -478,7 +474,11 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 				if token in game.progress_tokens_available {
 					append(
 						&valid_moves,
-						Move{move_data = Select_Progress_Token{token, int(token)}},
+						Move {
+							move_kind = .Select_Progress_Token,
+							token = token,
+							token_idx = int(token),
+						},
 					)
 				}
 			}
@@ -486,7 +486,10 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	case .Choose_Unavailable_Progress_Token:
 		{
 			for token, idx in game.progress_tokens_unavailable {
-				append(&valid_moves, Move{move_data = Select_Progress_Token{token, idx}})
+				append(
+					&valid_moves,
+					Move{move_kind = .Select_Progress_Token, token = token, token_idx = idx},
+				)
 				if idx >= 3 {break}
 			}
 		}
@@ -494,7 +497,10 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		{
 			for card, idx in opponent.cards_constructed {
 				if objects_db[card].colour == .Brown {
-					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+					append(
+						&valid_moves,
+						Move{move_kind = .Select_Card, card_name = card, card_idx = idx},
+					)
 				}
 			}
 		}
@@ -502,20 +508,26 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		{
 			for card, idx in opponent.cards_constructed {
 				if objects_db[card].colour == .Grey {
-					append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+					append(
+						&valid_moves,
+						Move{move_kind = .Select_Card, card_name = card, card_idx = idx},
+					)
 				}
 			}
 		}
 	case .Choose_Card_To_Revive:
 		{
 			for card, idx in game.cards_discarded {
-				append(&valid_moves, Move{move_data = Select_Card{card, idx}})
+				append(
+					&valid_moves,
+					Move{move_kind = .Select_Card, card_name = card, card_idx = idx},
+				)
 			}
 		}
 	case .Choose_First_Player:
 		{
-			append(&valid_moves, Move{move_data = Select_Player{turn_player_id}})
-			append(&valid_moves, Move{move_data = Select_Player{opponent_id}})
+			append(&valid_moves, Move{move_kind = .Select_Player, chosen_player = turn_player_id})
+			append(&valid_moves, Move{move_kind = .Select_Player, chosen_player = opponent_id})
 		}
 	}
 
@@ -701,7 +713,7 @@ remove_card_from_board :: proc(slot: ^Board_Slot, game: ^Game) -> (card_removed:
 			board[covered_id].covered_by_count -= 1
 			if board[covered_id].covered_by_count <= 0 {
 				board[covered_id].selectable = true
-				board[covered_id].visible = true
+				board[covered_id].face_up = true
 			}
 		}
 	}
@@ -775,6 +787,16 @@ calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> (vp: int, 
 	return vp, blue_vp
 }
 
+execute_move :: proc(move: Move, game: ^Game) -> bool {
+	valid_moves := get_valid_moves(game^)
+	for valid_move in valid_moves {
+		if move == valid_move {
+			execute_move_unsafe(move, game)
+			return true
+		}
+	}
+	return false
+}
 
 // Executes a move and progresses the game state --
 // Note! This function doesn't check if the move is valid first!
@@ -789,11 +811,13 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	// the Move struct stores the choice_state when the move was made if it's needed
 	game.next_choice_state = .Choose_Object_To_Construct_Or_Discard
 
-	switch move_data in move.move_data {
-	case Draft_Wonder:
+	switch move.move_kind {
+	case .None:
+		{return}
+	case .Draft_Wonder:
 		{
-			append(&player.wonders_available, move_data.wonder_name)
-			game.wonder_ids_draftable -= {move_data.wonder_idx}
+			append(&player.wonders_available, move.wonder_name.?)
+			game.wonder_ids_draftable -= {move.wonder_idx.?}
 			// we do a snake draft, so players double pick when there are 6 and 2 wonders left
 			wonders_left := &game.objects_left_in_age
 			wonders_left^ -= 1
@@ -810,65 +834,64 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				game.next_choice_state = .Choose_Wonder_To_Draft
 			}
 		}
-	case Construct_Card:
+	case .Construct_Card:
 		{
-			player.coins -= move_data.cost.total_coin_cost
+			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
-				opponent.coins += move_data.cost.traded_coin_cost
+				opponent.coins += move.cost.?.traded_coin_cost
 			}
-			slot := &board[move_data.slot_idx]
+			slot := &board[move.slot_idx.?]
 			card_to_construct := remove_card_from_board(slot, game)
 			construct_object(card_to_construct, move.acting_player, game)
 		}
-	case Construct_Wonder:
+	case .Construct_Wonder:
 		{
-			player.coins -= move_data.cost.total_coin_cost
+			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
-				opponent.coins += move_data.cost.traded_coin_cost
+				opponent.coins += move.cost.?.traded_coin_cost
 			}
-			slot := &board[move_data.slot_idx]
+			slot := &board[move.slot_idx.?]
 			card_to_tuck := remove_card_from_board(slot, game)
-			unordered_remove(&player.wonders_available, move_data.wonder_idx)
-			construct_object(move_data.wonder_name, move.acting_player, game)
+			unordered_remove(&player.wonders_available, move.wonder_idx.?)
+			construct_object(move.wonder_name.?, move.acting_player, game)
 			append(&player.cards_tucked, card_to_tuck)
 		}
-	case Discard_For_Coins:
+	case .Discard_For_Coins:
 		{
-			slot := &board[move_data.slot_idx]
+			slot := &board[move.slot_idx.?]
 			card_to_discard := remove_card_from_board(slot, game)
 			player.coins += 2 + player.object_kind_count_owned[.Yellow]
 			append(&game.cards_discarded, card_to_discard)
 		}
-	case Select_Progress_Token:
+	case .Select_Progress_Token:
 		{
-			gain_progress_token(move_data.token, move.acting_player, game)
+			gain_progress_token(move.token.?, move.acting_player, game)
 			if move.choice_state == .Choose_Progress_Token {
-				game.progress_tokens_available -= {move_data.token}
+				game.progress_tokens_available -= {move.token.?}
 			}
 			if move.choice_state == .Choose_Unavailable_Progress_Token {
-				unordered_remove(&game.progress_tokens_unavailable, move_data.token_idx)
+				unordered_remove(&game.progress_tokens_unavailable, move.token_idx.?)
 			}
 		}
-	case Select_Card:
+	case .Select_Card:
 		{
 			if move.choice_state == .Choose_Card_To_Revive {
-				unordered_remove(&game.cards_discarded, move_data.card_idx)
-				construct_object(move_data.card_name, move.acting_player, game)
+				unordered_remove(&game.cards_discarded, move.card_idx.?)
+				construct_object(move.card_name.?, move.acting_player, game)
 			}
 			if move.choice_state == .Choose_Brown_Card_To_Destroy ||
 			   move.choice_state == .Choose_Grey_Card_To_Destroy {
-				unordered_remove(&opponent.cards_constructed, move_data.card_idx)
-				append(&game.cards_discarded, move_data.card_name)
-				card_data := objects_db[move_data.card_name]
+				unordered_remove(&opponent.cards_constructed, move.card_idx.?)
+				append(&game.cards_discarded, move.card_name.?)
+				card_data := objects_db[move.card_name.?]
 				opponent.object_kind_count_owned[card_data.colour] -= 1
 				opponent.resource_production -= card_data.resources_produced
 			}
 		}
-	case Select_Player:
+	case .Select_Player:
 		{
-			game.next_choice_state = .Choose_Object_To_Construct_Or_Discard
 			if move.choice_state == .Choose_First_Player {
-				game.turn_player = move_data.chosen_player
+				game.turn_player = move.chosen_player.?
 			}
 		}
 	}
@@ -901,8 +924,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			} else {
 				if net_blue_vp < 0 {game.winner = .P1} else {game.winner = .P2}
 			}
-			return
 		}
+		return
 	}
 
 	if game.next_choice_state == .Choose_Object_To_Construct_Or_Discard {
@@ -912,3 +935,4 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	}
 }
+

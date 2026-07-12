@@ -1,16 +1,15 @@
 package seven_wonders_duel
 
-import hm "core:container/handle_map"
 import "core:fmt"
+import "core:math"
 import "core:mem"
+import "core:slice"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
-Handle :: hm.Handle32
-
 STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1920, 1080
 get_screen_centre :: proc() -> [2]f32 {
-	return {auto_cast rl.GetScreenWidth() / 2, auto_cast rl.GetScreenHeight() / 2}
+	return {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
 }
 
 MAX_FPS :: 120
@@ -28,59 +27,104 @@ window_setup :: proc() {
 
 MAX_UI_ELEMENTS :: 256
 UILabels :: enum {
+	None,
 	Visual,
 	GameObject,
-	ScienceSymbol,
+	ProgressToken,
 	ShowDiscard,
 	ShowLog,
 	ShowMenu,
 }
 UIElement :: struct {
-	handle:           Handle,
-	label:            UILabels,
-	texture:          rl.Texture2D,
-	sub_texture_rect: rl.Rectangle,
-	hitbox_size:      [2]f32,
-	texture_size:     [2]f32,
-	centre_position:  [2]f32,
-	depth:            f32,
-	visible:          bool,
-	clickable:        bool,
-	game_object:      Maybe(swd.Object),
-	science_symbol:   Maybe(swd.Science_Symbol),
+	label:          UILabels,
+	game_object:    swd.Object_Name,
+	progress_token: swd.Progress_Token,
+	hitbox:         rl.Rectangle,
 }
-
-UIState :: struct {
-	game:               ^swd.Game,
-	ui_elements:        hm.Static_Handle_Map(MAX_UI_ELEMENTS, UIElement, Handle),
-	discard_visible:    bool,
-	log_visible:        bool,
-	hovered_last_frame: Handle,
-	clicked_last_frame: Handle,
-	draw_order:         [dynamic; MAX_UI_ELEMENTS]Handle,
-	draw_order_dirty:   bool,
-}
+last_mouse_world_position: [2]f32
+ui_element_clicked_last_frame: UIElement
+ui_element_list: [dynamic; MAX_UI_ELEMENTS]UIElement
+ui_element_list_dirty: bool = true
 
 handle_input :: proc(game: ^swd.Game) {
 	if rl.IsKeyReleased(.Q) {
-		testAge = .DraftWonders
+		ui_element_list_dirty = true
+		game.age = .DraftWonders
 	}
 	if rl.IsKeyReleased(.W) {
-		testAge = .Age1
+		ui_element_list_dirty = true
+		game.age = .Age1
 	}
 	if rl.IsKeyReleased(.E) {
-		testAge = .Age2
+		ui_element_list_dirty = true
+		game.age = .Age2
 	}
 	if rl.IsKeyReleased(.R) {
-		testAge = .Age3
+		ui_element_list_dirty = true
+		game.age = .Age3
 	}
 	if rl.IsKeyReleased(.S) {
+		ui_element_list_dirty = true
 		game.military_track -= 1
 	}
 	if rl.IsKeyReleased(.D) {
+		ui_element_list_dirty = true
 		game.military_track += 1
 	}
+
+	ui_element_clicked_last_frame = {}
+	if rl.IsMouseButtonReleased(.LEFT) {
+		fmt.println(last_mouse_world_position)
+		#reverse for ui_element in ui_element_list {
+			if rl.CheckCollisionPointRec(last_mouse_world_position, ui_element.hitbox) {
+				ui_element_clicked_last_frame = ui_element
+				break
+			}
+		}
+		fmt.println(ui_element_clicked_last_frame)
+		process_click(ui_element_clicked_last_frame, game)
+	}
+
+	last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
 }
+
+process_click :: proc(ui_element_clicked: UIElement, game: ^swd.Game) {
+	valid_moves := swd.get_valid_moves(game^)
+	selected_move: swd.Move
+	switch game.choice_state {
+	case .Choose_Wonder_To_Draft:
+		{
+			for move in valid_moves {
+				if move.move_kind != .Draft_Wonder {continue}
+				if move.wonder_name == ui_element_clicked.game_object {
+					selected_move = move
+					break
+				}
+			}
+		}
+	case .Choose_Object_To_Construct_Or_Discard:
+		{
+
+		}
+	case .Choose_Progress_Token:
+		{}
+	case .Choose_Unavailable_Progress_Token:
+		{}
+	case .Choose_Brown_Card_To_Destroy:
+		{}
+	case .Choose_Grey_Card_To_Destroy:
+		{}
+	case .Choose_Card_To_Revive:
+		{}
+	case .Choose_First_Player:
+		{}
+	}
+	if selected_move.move_kind != .None {
+		swd.execute_move(selected_move, game)
+		ui_element_list_dirty = true
+	}
+}
+
 
 card_structure_grids: [swd.Age][20][2]int = #partial {
 	.Age1 = {
@@ -153,6 +197,7 @@ card_structure_grids: [swd.Age][20][2]int = #partial {
 
 CARD_SIZE: [2]f32 : {120, 190}
 WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
+
 draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
 	if age == .DraftWonders {
 		for wonder, i in game.wonders_to_draft {
@@ -168,8 +213,24 @@ draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
 				case 3:
 					{grid_pos = {1, 1}}
 				}
-				position := midpoint + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
-				draw_card_texture(wonder, position, WONDER_SIZE)
+				texture_mid_pos := midpoint + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
+				texture_top_left_pos := texture_mid_pos - WONDER_SIZE / 2
+				draw_card_texture(wonder, texture_mid_pos, WONDER_SIZE)
+				if ui_element_list_dirty {
+					append(
+						&ui_element_list,
+						UIElement {
+							label = .GameObject,
+							game_object = wonder,
+							hitbox = {
+								texture_top_left_pos.x,
+								texture_top_left_pos.y,
+								WONDER_SIZE.x,
+								WONDER_SIZE.y,
+							},
+						},
+					)
+				}
 			} else {continue}
 		}
 	} else {
@@ -179,14 +240,30 @@ draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, game: swd.Game) {
 		for i := 19; i >= 0; i -= 1 {
 			grid_pos := layout_grid[i]
 			slot := game.boards[age][i]
-			texture_pos: [2]f32 =
+			texture_mid_pos: [2]f32 =
 				midpoint + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
+			texture_top_left_pos := texture_mid_pos - CARD_SIZE / 2
 			if slot.card_in_slot == {} {continue}
-			if slot.visible {
-				draw_card_texture(slot.card_in_slot, texture_pos, CARD_SIZE)
+			if slot.face_up {
+				draw_card_texture(slot.card_in_slot, texture_mid_pos, CARD_SIZE)
+				if ui_element_list_dirty {
+					append(
+						&ui_element_list,
+						UIElement {
+							label = .GameObject,
+							game_object = slot.card_in_slot,
+							hitbox = {
+								texture_top_left_pos.x,
+								texture_top_left_pos.y,
+								CARD_SIZE.x,
+								CARD_SIZE.y,
+							},
+						},
+					)
+				}
 			} else {
 				card_back := object_texture_info_db[slot.card_in_slot].card_back
-				draw_card_back(card_back, texture_pos, CARD_SIZE)
+				draw_card_back(card_back, texture_mid_pos, CARD_SIZE)
 			}
 		}
 	}
@@ -263,22 +340,40 @@ draw_military_track :: proc(midpoint: [2]f32, game: swd.Game) {
 	)
 
 	token_spacing: f32 = PROGRESS_TOKEN_DIAMETER + 4 * MILITARY_TRACK_SCALE
+	token_size: [2]f32 = {PROGRESS_TOKEN_DIAMETER, PROGRESS_TOKEN_DIAMETER}
 	token_offset: f32 = -2 * token_spacing
 	for token in game.progress_tokens_available {
 		texture := progress_token_textures[token]
+		texture_mid_pos: [2]f32 = {
+			midpoint.x + token_offset,
+			midpoint.y - 67 * MILITARY_TRACK_SCALE,
+		}
 		rl.DrawTexturePro(
 			texture,
 			{0, 0, f32(texture.width), f32(texture.height)},
 			{
-				midpoint.x + token_offset,
-				midpoint.y - 67 * MILITARY_TRACK_SCALE,
+				texture_mid_pos.x,
+				texture_mid_pos.y,
 				PROGRESS_TOKEN_DIAMETER,
 				PROGRESS_TOKEN_DIAMETER,
 			},
-			{PROGRESS_TOKEN_DIAMETER / 2, PROGRESS_TOKEN_DIAMETER / 2},
+			token_size / 2,
 			180,
 			rl.WHITE,
 		)
+		if ui_element_list_dirty {
+			texture_top_left_pos := texture_mid_pos - token_size / 2
+			hitbox_rect: rl.Rectangle = {
+				texture_top_left_pos.x,
+				texture_top_left_pos.y,
+				PROGRESS_TOKEN_DIAMETER,
+				PROGRESS_TOKEN_DIAMETER,
+			}
+			append(
+				&ui_element_list,
+				UIElement{label = .ProgressToken, progress_token = token, hitbox = hitbox_rect},
+			)
+		}
 		token_offset += token_spacing
 	}
 }
@@ -321,13 +416,56 @@ draw_player_coins :: proc(position: [2]f32, player: swd.Player_ID, game: swd.Gam
 	rl.DrawTextEx(coin_font, value, textPosition, f32(COIN_FONT_SIZE), 0, textColour)
 }
 
+game_object_sort :: proc(i, j: swd.Object_Name) -> bool {
+	return i32(i) < i32(j)
+}
+
+draw_player_wonders :: proc(game: swd.Game) {
+	gap: f32 = 5
+	p1_wonders := swd.get_all_player_wonders(game.player_states[.P1])
+	slice.sort_by(p1_wonders[:], game_object_sort)
+	for wonder, i in p1_wonders {
+		row, col := math.divmod(i, 2)
+		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
+		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
+		draw_card_texture(wonder, {x, y}, WONDER_SIZE)
+		if ui_element_list_dirty {
+			ui_element := UIElement {
+				label       = .GameObject,
+				game_object = wonder,
+				hitbox      = {x, y, WONDER_SIZE.x, WONDER_SIZE.y},
+			}
+			append(&ui_element_list, ui_element)
+		}
+	}
+	p2_wonders := swd.get_all_player_wonders(game.player_states[.P2])
+	slice.sort_by(p2_wonders[:], game_object_sort)
+	for wonder, i in p2_wonders {
+		row, col := math.divmod(i, 2)
+		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
+		x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5
+		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
+		draw_card_texture(wonder, {x, y}, WONDER_SIZE)
+		if ui_element_list_dirty {
+			ui_element := UIElement {
+				label       = .GameObject,
+				game_object = wonder,
+				hitbox      = {x, y, WONDER_SIZE.x, WONDER_SIZE.y},
+			}
+			append(&ui_element_list, ui_element)
+		}
+	}
+}
+
 draw_frame :: proc(game: swd.Game) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
 	rl.BeginMode2D(camera)
 
+	if ui_element_list_dirty {clear(&ui_element_list)}
+
 	card_structure_midpoint: [2]f32 = {STARTING_WINDOW_WIDTH / 2, 1.57 * CARD_SIZE.y + 5}
-	draw_card_structure(card_structure_midpoint, testAge, game)
+	draw_card_structure(card_structure_midpoint, game.age, game)
 
 	military_track_midpoint: [2]f32 = {
 		STARTING_WINDOW_WIDTH / 2,
@@ -342,14 +480,7 @@ draw_frame :: proc(game: swd.Game) {
 	draw_player_coins(p1_coin_position, .P1, game)
 	draw_player_coins(p2_coin_position, .P2, game)
 
-	for col in 0 ..< 2 {
-		gap: f32 = 5
-		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
-		for row in 0 ..< 2 {
-			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-			draw_card_texture(.The_Appian_Way, {x, y}, WONDER_SIZE)
-		}
-	}
+	draw_player_wonders(game)
 
 	for col in 0 ..< 4 {
 		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
@@ -359,11 +490,16 @@ draw_frame :: proc(game: swd.Game) {
 		}
 	}
 
+	if ui_element_list_dirty {
+		for ui_element in ui_element_list {
+			fmt.println(ui_element)
+		}
+		ui_element_list_dirty = false
+	}
+
 	rl.EndMode2D()
 	rl.EndDrawing()
 }
-
-testAge: swd.Age = .Age1
 
 main :: proc() {
 	// tracking allocator
@@ -407,3 +543,4 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 }
+

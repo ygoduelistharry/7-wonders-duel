@@ -187,7 +187,7 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	width, height: f32
 	switch key.card_back {
 	case .Wonders:
-		{width, height = 858, 460}
+		{width, height = 858, 552}
 	case .Guilds:
 		{width, height = 557, 858}
 	case .Age1:
@@ -199,7 +199,6 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	}
 	row, col := key.atlas_position[0], key.atlas_position[1]
 	pos: [2]f32 = {f32(col) * width, f32(row) * height}
-	if key.card_back == .Wonders {pos.y += 60}
 	return {pos.x, pos.y, width, height}
 }
 
@@ -207,7 +206,7 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 rounded_corners_shader: rl.Shader
 draw_card_texture :: proc(
 	name: swd.Object_Name,
-	position: [2]f32,
+	mid_pos: [2]f32,
 	size: [2]f32,
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
@@ -230,7 +229,7 @@ draw_card_texture :: proc(
 	rl.DrawTexturePro(
 		atlas,
 		source_rect,
-		{position.x, position.y, size.x, size.y},
+		{mid_pos.x, mid_pos.y, size.x, size.y},
 		{size.x, size.y} / 2,
 		rotation,
 		tint,
@@ -240,7 +239,7 @@ draw_card_texture :: proc(
 
 draw_card_back :: proc(
 	card_back: Card_Back,
-	position: [2]f32,
+	mid_pos: [2]f32,
 	size: [2]f32,
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
@@ -257,10 +256,11 @@ draw_card_back :: proc(
 	rl.DrawTexturePro(
 		texture,
 		{0, 0, f32(texture.width), f32(texture.height)},
-		{position.x, position.y, size.x, size.y},
+		{mid_pos.x, mid_pos.y, size.x, size.y},
 		{size.x, size.y} / 2,
 		rotation,
 		tint,
 	)
 	rl.EndShaderMode()
 }
+
