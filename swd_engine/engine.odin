@@ -190,7 +190,6 @@ Game :: struct {
 	objects_left_in_age:         int,
 	turn_player:                 Player_ID,
 	choice_state:                Choice_State,
-	next_choice_state:           Choice_State,
 	go_again_active:             bool,
 	military_track:              int, //negative means p1 leading
 	military_tokens_available:   Military_Tokens,
@@ -687,7 +686,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 			}
 		}
 		if player.science_symbols[symbol] == 2 {
-			game.next_choice_state = .Choose_Progress_Token
+			game.choice_state = .Choose_Progress_Token
 		}
 	}
 
@@ -695,10 +694,10 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	if object.go_again || (.Theology in player.progress_tokens && object.colour == .Wonder) {
 		game.go_again_active = true
 	}
-	if object.gain_unavailable_progress_token {game.next_choice_state = .Choose_Unavailable_Progress_Token}
-	if object.destroy_brown_card {game.next_choice_state = .Choose_Brown_Card_To_Destroy}
-	if object.destroy_grey_card {game.next_choice_state = .Choose_Grey_Card_To_Destroy}
-	if object.revive_card {game.next_choice_state = .Choose_Card_To_Revive}
+	if object.gain_unavailable_progress_token {game.choice_state = .Choose_Unavailable_Progress_Token}
+	if object.destroy_brown_card {game.choice_state = .Choose_Brown_Card_To_Destroy}
+	if object.destroy_grey_card {game.choice_state = .Choose_Grey_Card_To_Destroy}
+	if object.revive_card {game.choice_state = .Choose_Card_To_Revive}
 }
 
 // Returns the card removed from the slot (will be .None if slot was empty)
@@ -809,7 +808,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	// the most common next state is constructing an object or discarding for coins.
 	// the switch statement will set the next state differently if appropriate.
 	// the Move struct stores the choice_state when the move was made if it's needed
-	game.next_choice_state = .Choose_Object_To_Construct_Or_Discard
+	game.choice_state = .Choose_Object_To_Construct_Or_Discard
 
 	switch move.move_kind {
 	case .None:
@@ -831,7 +830,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			if game.objects_left_in_age <= 0 {
 				game.end_of_age_triggered = true
 			} else {
-				game.next_choice_state = .Choose_Wonder_To_Draft
+				game.choice_state = .Choose_Wonder_To_Draft
 			}
 		}
 	case .Construct_Card:
@@ -899,6 +898,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	append(&game.move_history, move)
 
 	if game.end_of_age_triggered {
+		game.end_of_age_triggered = false
 		// if a go-again wonder was played as last card, it doesnt carry over to next age
 		game.go_again_active = false
 		if game.age != .Age3 {
@@ -911,7 +911,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				if game.military_track < 0 {game.turn_player = .P2}
 				// if military is a tie, the last action taker choses first
 				// so we dont need to change the turn player
-				game.next_choice_state = .Choose_First_Player
+				game.choice_state = .Choose_First_Player
 			}
 		} else {
 			game.completed = true
@@ -928,7 +928,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		return
 	}
 
-	if game.next_choice_state == .Choose_Object_To_Construct_Or_Discard {
+	if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
 		if !game.go_again_active {
 			change_turn_player(game)
 			game.go_again_active = false
