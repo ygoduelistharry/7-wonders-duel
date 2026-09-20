@@ -6,7 +6,7 @@ import "core:slice"
 import "core:time"
 
 Science_Symbol :: enum u8 {
-	Astrolabe,
+	Astrolabe = 1,
 	Scales,
 	Sundial,
 	Mortar_And_Pestle,
@@ -16,7 +16,7 @@ Science_Symbol :: enum u8 {
 }
 
 Progress_Token :: enum u16 {
-	Agriculture,
+	Agriculture = 1,
 	Architechture,
 	Economy,
 	Law,
@@ -30,7 +30,7 @@ Progress_Token :: enum u16 {
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
 
 Linking_Symbol :: enum u32 {
-	Stable,
+	Stable = 1,
 	Garrison,
 	Palisade,
 	Archery_Range,
@@ -122,9 +122,8 @@ Object_Base_Cost :: struct {
 
 Player_State :: struct {
 	cards_constructed:                  [dynamic; 30]Object_Name,
-	wonders_constructed:                [dynamic; 4]Object_Name,
-	cards_tucked:                       [dynamic; 4]Object_Name,
-	wonders_available:                  [dynamic; 4]Object_Name,
+	wonders:                            [dynamic; 4]Object_Name,
+	cards_tucked:                       [4]Object_Name,
 	object_kind_count_owned:            [Object_Colour]int,
 	player_id:                          Player_ID,
 	coins:                              int,
@@ -140,16 +139,22 @@ Player_State :: struct {
 	fixed_vp_from_other:                int,
 	guilds_built:                       Guilds,
 }
-
-get_all_player_wonders :: proc(player: Player_State) -> [dynamic; 4]Object_Name {
-	all_wonders: [dynamic; 4]Object_Name
-	for wonder in player.wonders_constructed {
-		append(&all_wonders, wonder)
+count_constructed_wonders_player :: proc(player: Player_State) -> int {
+	count := 0
+	for card in player.cards_tucked {
+		if int(card) != 0 {count += 1}
 	}
-	for wonder in player.wonders_available {
-		append(&all_wonders, wonder)
-	}
-	return all_wonders
+	return count
+}
+count_constructed_wonders_game :: proc(game: Game) -> int {
+	return(
+		count_constructed_wonders(game.player_states[.P1]) +
+		count_constructed_wonders(game.player_states[.P2]) \
+	)
+}
+count_constructed_wonders :: proc {
+	count_constructed_wonders_player,
+	count_constructed_wonders_game,
 }
 
 Player_ID :: enum i8 {
@@ -193,7 +198,8 @@ Game :: struct {
 	go_again_active:             bool,
 	military_track:              int, //negative means p1 leading
 	military_tokens_available:   Military_Tokens,
-	progress_tokens_available:   Progress_Tokens,
+	progress_tokens_available:   [dynamic; 5]Progress_Token,
+	progress_token_taken:        [5]bool,
 	progress_tokens_unavailable: [dynamic; 10]Progress_Token,
 	end_of_age_triggered:        bool,
 	completed:                   bool,
@@ -253,12 +259,10 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 		progress_tokens[idx] = token
 	}
 	rand.shuffle(progress_tokens[:], rng)
-	for token, idx in progress_tokens {
-		if idx < 5 {
-			new_game.progress_tokens_available += {token}
-		} else {
-			append(&new_game.progress_tokens_unavailable, token)
-		}
+	for token in progress_tokens[:5] {
+		append(&new_game.progress_tokens_available, token)}
+	for token in progress_tokens[5:] {
+		append(&new_game.progress_tokens_unavailable, token)
 	}
 
 	new_game.player_states = {
@@ -415,8 +419,9 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		{
 			// get all constructable wonders if 7 haven't been built yet
 			base_wonder_moves: [dynamic; 4]Move
-			if len(turn_player.wonders_constructed) + len(opponent.wonders_constructed) < 7 {
-				for wonder, idx in turn_player.wonders_available {
+			if count_constructed_wonders(game) < 7 {
+				for wonder, idx in turn_player.wonders {
+					if int(turn_player.cards_tucked[idx]) != 0 {continue}
 					wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
 					if wonder_cost.total_coin_cost <= turn_player.coins {
 						append(
@@ -469,17 +474,13 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		}
 	case .Choose_Progress_Token:
 		{
-			for token in Progress_Token {
-				if token in game.progress_tokens_available {
-					append(
-						&valid_moves,
-						Move {
-							move_kind = .Select_Progress_Token,
-							token = token,
-							token_idx = int(token),
-						},
-					)
-				}
+			for token, idx in game.progress_tokens_available {
+				if game.progress_token_taken[idx] {continue}
+				append(
+					&valid_moves,
+					Move{move_kind = .Select_Progress_Token, token = token, token_idx = idx},
+				)
+
 			}
 		}
 	case .Choose_Unavailable_Progress_Token:
@@ -545,7 +546,7 @@ get_guild_value :: proc(guild: Guild, player_id: Player_ID, game: Game) -> (vp: 
 	switch guild {
 	case .Builders_Guild:
 		{
-			count := max(len(player.wonders_constructed), len(opponent.wonders_constructed))
+			count := max(count_constructed_wonders(player), count_constructed_wonders(opponent))
 			vp = 2 * count
 		}
 	case .Moneylenders_Guild:
@@ -600,10 +601,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player := &game.player_states[player_id]
 	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
 
-	if object.colour == .Wonder {
-		append(&player.wonders_constructed, object_name)
-
-	} else {
+	if object.colour != .Wonder {
 		append(&player.cards_constructed, object_name)
 	}
 	player.object_kind_count_owned[object.colour] += 1
@@ -786,7 +784,8 @@ calculate_victory_points :: proc(player_id: Player_ID, game: Game) -> (vp: int, 
 	return vp, blue_vp
 }
 
-execute_move :: proc(move: Move, game: ^Game) -> bool {
+// To be used externally by programs interacting with the game
+execute_move_safe :: proc(move: Move, game: ^Game) -> bool {
 	valid_moves := get_valid_moves(game^)
 	for valid_move in valid_moves {
 		if move == valid_move {
@@ -815,7 +814,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		{return}
 	case .Draft_Wonder:
 		{
-			append(&player.wonders_available, move.wonder_name.?)
+			append(&player.wonders, move.wonder_name.?)
 			game.wonder_ids_draftable -= {move.wonder_idx.?}
 			// we do a snake draft, so players double pick when there are 6 and 2 wonders left
 			wonders_left := &game.objects_left_in_age
@@ -851,9 +850,13 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			}
 			slot := &board[move.slot_idx.?]
 			card_to_tuck := remove_card_from_board(slot, game)
-			unordered_remove(&player.wonders_available, move.wonder_idx.?)
 			construct_object(move.wonder_name.?, move.acting_player, game)
-			append(&player.cards_tucked, card_to_tuck)
+			for wonder, idx in player.wonders {
+				if wonder == move.wonder_name {
+					player.cards_tucked[idx] = card_to_tuck
+					break
+				}
+			}
 		}
 	case .Discard_For_Coins:
 		{
@@ -866,7 +869,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		{
 			gain_progress_token(move.token.?, move.acting_player, game)
 			if move.choice_state == .Choose_Progress_Token {
-				game.progress_tokens_available -= {move.token.?}
+				game.progress_token_taken[move.token_idx.?] = true
 			}
 			if move.choice_state == .Choose_Unavailable_Progress_Token {
 				unordered_remove(&game.progress_tokens_unavailable, move.token_idx.?)

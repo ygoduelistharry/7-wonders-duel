@@ -26,9 +26,10 @@ window_setup :: proc() {
 }
 
 MAX_UI_ELEMENTS :: 256
-UILabels :: enum {
+UILabel :: enum {
 	None,
 	Visual,
+	Text,
 	GameObject,
 	ProgressToken,
 	ShowDiscard,
@@ -40,10 +41,69 @@ UILabels :: enum {
 	SelectP2,
 }
 UIElement :: struct {
-	label:          UILabels,
-	game_object:    swd.Object_Name,
-	progress_token: swd.Progress_Token,
-	hitbox:         rl.Rectangle,
+	label:           UILabel,
+	dest_midpoint:   [2]f32,
+	dest_size:       [2]f32,
+	hitbox_midpoint: [2]f32,
+	hitbox_size:     [2]f32,
+	rotation:        f32,
+	//texture data
+	texture:         rl.Texture2D,
+	source_rect:     rl.Rectangle,
+	//engine related objects
+	game_object:     swd.Object_Name,
+	progress_token:  swd.Progress_Token,
+	//text
+	text:            cstring,
+	font:            rl.Font,
+	font_size:       f32,
+	text_colour:     rl.Color,
+}
+get_hitbox :: proc(ui_element: UIElement) -> rl.Rectangle {
+	hitbox_topleft := ui_element.hitbox_midpoint - ui_element.hitbox_size / 2
+	hitbox: rl.Rectangle = {
+		x      = hitbox_topleft.x,
+		y      = hitbox_topleft.y,
+		width  = ui_element.hitbox_size.x,
+		height = ui_element.hitbox_size.y,
+	}
+	return hitbox
+}
+draw_element :: proc(ui_element: UIElement) {
+	if ui_element.label == .None {return}
+	if ui_element.label == .GameObject {
+		draw_card_texture(ui_element.game_object, ui_element.dest_midpoint, ui_element.dest_size)
+	} else if ui_element.label == .Text {
+		text_size := rl.MeasureTextEx(ui_element.font, ui_element.text, ui_element.font_size, 0)
+		text_position := ui_element.dest_midpoint - text_size / 2
+		rl.DrawTextEx(
+			ui_element.font,
+			ui_element.text,
+			text_position,
+			ui_element.font_size,
+			0,
+			ui_element.text_colour,
+		)
+	} else {
+		source_rect := ui_element.source_rect
+		if source_rect == {0, 0, 0, 0} {
+			source_rect = {0, 0, f32(ui_element.texture.width), f32(ui_element.texture.height)}
+		}
+		dest_rect: rl.Rectangle = {
+			ui_element.dest_midpoint.x,
+			ui_element.dest_midpoint.y,
+			ui_element.dest_size.x,
+			ui_element.dest_size.y,
+		}
+		rl.DrawTexturePro(
+			ui_element.texture,
+			source_rect,
+			dest_rect,
+			ui_element.dest_size / 2,
+			ui_element.rotation,
+			rl.WHITE,
+		)
+	}
 }
 UIState :: struct {
 	game:                          ^swd.Game,
@@ -53,6 +113,7 @@ UIState :: struct {
 	ui_element_list_dirty:         bool,
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
+	object_chosen:                 Maybe(swd.Object_Name),
 }
 print_ui_element_name :: proc(ui_element: UIElement) {
 	#partial switch ui_element.label {
@@ -95,7 +156,10 @@ handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsMouseButtonReleased(.LEFT) {
 		fmt.println(ui_state.last_mouse_world_position)
 		#reverse for ui_element in ui_state.ui_element_list {
-			if rl.CheckCollisionPointRec(ui_state.last_mouse_world_position, ui_element.hitbox) {
+			if rl.CheckCollisionPointRec(
+				ui_state.last_mouse_world_position,
+				get_hitbox(ui_element),
+			) {
 				ui_state.ui_element_clicked_last_frame = ui_element
 				break
 			}
@@ -107,7 +171,6 @@ handle_input :: proc(ui_state: ^UIState) {
 	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
 }
 
-object_chosen: Maybe(swd.Object_Name)
 handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	selected_move: swd.Move
 	switch ui_state.game.choice_state {
@@ -123,22 +186,22 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 		}
 	case .Choose_Object_To_Construct_Or_Discard:
 		{
-			if object_chosen == nil {
+			if ui_state.object_chosen == nil {
 				if ui_element_clicked.label != .GameObject {break}
 				for move in ui_state.valid_moves {
 					if move.wonder_name == ui_element_clicked.game_object {
-						object_chosen = move.wonder_name
+						ui_state.object_chosen = move.wonder_name
 						break
 					}
 					if move.card_name == ui_element_clicked.game_object {
-						object_chosen = move.card_name
+						ui_state.object_chosen = move.card_name
 						break
 					}
 				}
 			} else {
-				if swd.objects_db[object_chosen.?].colour == .Wonder {
+				if swd.objects_db[ui_state.object_chosen.?].colour == .Wonder {
 					for move in ui_state.valid_moves {
-						if move.wonder_name == object_chosen &&
+						if move.wonder_name == ui_state.object_chosen &&
 						   move.card_name == ui_element_clicked.game_object {
 							selected_move = move
 							break
@@ -147,20 +210,21 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 				} else if ui_element_clicked.label == .DiscardForCoinConfirm {
 					for move in ui_state.valid_moves {
 						if move.move_kind == .Discard_For_Coins &&
-						   move.card_name == object_chosen.? {
+						   move.card_name == ui_state.object_chosen.? {
 							selected_move = move
 							break
 						}
 					}
 				} else if ui_element_clicked.label == .ConstructCardConfirm {
 					for move in ui_state.valid_moves {
-						if move.move_kind == .Construct_Card && move.card_name == object_chosen.? {
+						if move.move_kind == .Construct_Card &&
+						   move.card_name == ui_state.object_chosen.? {
 							selected_move = move
 							break
 						}
 					}
 				}
-				object_chosen = nil
+				ui_state.object_chosen = nil
 			}
 		}
 	case .Choose_Progress_Token:
@@ -177,7 +241,7 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 		{}
 	}
 	if selected_move.move_kind != .None {
-		swd.execute_move(selected_move, ui_state.game)
+		swd.execute_move_safe(selected_move, ui_state.game)
 		ui_state.ui_element_list_dirty = true
 		ui_state.valid_moves_dirty = true
 	}
@@ -256,276 +320,332 @@ card_structure_grids: [swd.Age][20][2]int = #partial {
 CARD_SIZE: [2]f32 : {120, 190}
 WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
 
-draw_card_structure :: proc(midpoint: [2]f32, age: swd.Age, ui_state: ^UIState) {
-	if age == .DraftWonders {
-		for wonder, i in ui_state.game.wonders_to_draft {
-			if i in ui_state.game.wonder_ids_draftable {
-				grid_pos: [2]f32
-				switch i % 4 {
-				case 0:
-					{grid_pos = {-1, -1}}
-				case 1:
-					{grid_pos = {1, -1}}
-				case 2:
-					{grid_pos = {-1, 1}}
-				case 3:
-					{grid_pos = {1, 1}}
-				}
-				texture_mid_pos := midpoint + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
-				texture_top_left_pos := texture_mid_pos - WONDER_SIZE / 2
-				draw_card_texture(wonder, texture_mid_pos, WONDER_SIZE)
-				if ui_state.ui_element_list_dirty {
-					append(
-						&ui_state.ui_element_list,
-						UIElement {
-							label = .GameObject,
-							game_object = wonder,
-							hitbox = {
-								texture_top_left_pos.x,
-								texture_top_left_pos.y,
-								WONDER_SIZE.x,
-								WONDER_SIZE.y,
-							},
-						},
-					)
-				}
-			} else {continue}
-		}
-	} else {
-		y_offset: f32 = CARD_SIZE.y * 1.0 / 2.8
-		x_offset: f32 = CARD_SIZE.x * 1.0 / 2.0 + 3
-		layout_grid := card_structure_grids[age]
-		for i := 19; i >= 0; i -= 1 {
-			grid_pos := layout_grid[i]
-			slot := ui_state.game.boards[age][i]
-			texture_mid_pos: [2]f32 =
-				midpoint + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
-			texture_top_left_pos := texture_mid_pos - CARD_SIZE / 2
-			if slot.card_in_slot == {} {continue}
-			if slot.face_up {
-				draw_card_texture(slot.card_in_slot, texture_mid_pos, CARD_SIZE)
-				if ui_state.ui_element_list_dirty {
-					append(
-						&ui_state.ui_element_list,
-						UIElement {
-							label = .GameObject,
-							game_object = slot.card_in_slot,
-							hitbox = {
-								texture_top_left_pos.x,
-								texture_top_left_pos.y,
-								CARD_SIZE.x,
-								CARD_SIZE.y,
-							},
-						},
-					)
-				}
-			} else {
-				card_back := object_texture_info_db[slot.card_in_slot].card_back
-				draw_card_back(card_back, texture_mid_pos, CARD_SIZE)
+game_object_sort :: proc(i, j: swd.Object_Name) -> bool {
+	return i32(i) < i32(j)
+}
+
+
+CARD_STRUCTURE_MIDPOINT: [2]f32 : {STARTING_WINDOW_WIDTH / 2, 1.57 * CARD_SIZE.y + 5}
+append_wonder_draft_elements :: proc(ui_state: ^UIState) {
+	if ui_state.game.age != .DraftWonders {return}
+	for wonder, i in ui_state.game.wonders_to_draft {
+		if i in ui_state.game.wonder_ids_draftable {
+			grid_pos: [2]f32
+			switch i % 4 {
+			case 0:
+				{grid_pos = {-1, -1}}
+			case 1:
+				{grid_pos = {1, -1}}
+			case 2:
+				{grid_pos = {-1, 1}}
+			case 3:
+				{grid_pos = {1, 1}}
 			}
+			midpoint := CARD_STRUCTURE_MIDPOINT + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .GameObject,
+					game_object = wonder,
+					hitbox_midpoint = midpoint,
+					hitbox_size = WONDER_SIZE,
+					dest_midpoint = midpoint,
+					dest_size = WONDER_SIZE,
+				},
+			)
+		}
+	}
+}
+
+append_card_structure_elements :: proc(ui_state: ^UIState) {
+	if ui_state.game.age == .DraftWonders {return}
+	y_offset: f32 = CARD_SIZE.y * 1.0 / 2.8
+	x_offset: f32 = CARD_SIZE.x * 1.0 / 2.0 + 3
+	layout_grid := card_structure_grids[ui_state.game.age]
+	for i := 19; i >= 0; i -= 1 {
+		grid_pos := layout_grid[i]
+		slot := ui_state.game.boards[ui_state.game.age][i]
+		midpoint: [2]f32 =
+			CARD_STRUCTURE_MIDPOINT + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
+		if slot.card_in_slot == {} {continue}
+		if slot.face_up {
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .GameObject,
+					game_object = slot.card_in_slot,
+					dest_midpoint = midpoint,
+					dest_size = CARD_SIZE,
+					hitbox_midpoint = midpoint,
+					hitbox_size = CARD_SIZE,
+				},
+			)
+		} else {
+			back := object_texture_info_db[slot.card_in_slot].card_back
+			back_texture := card_back_textures[back]
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .Visual,
+					texture = back_texture,
+					dest_midpoint = midpoint,
+					dest_size = CARD_SIZE,
+					hitbox_midpoint = midpoint,
+					hitbox_size = CARD_SIZE,
+				},
+			)
 		}
 	}
 }
 
 MILITARY_TRACK_SCALE: f32 : 1.2
 MILITARY_TRACK_SIZE: [2]f32 : {780 * MILITARY_TRACK_SCALE, 240 * MILITARY_TRACK_SCALE}
+MILITARY_TRACK_MIDPOINT: [2]f32 : {
+	STARTING_WINDOW_WIDTH / 2,
+	STARTING_WINDOW_HEIGHT - MILITARY_TRACK_SIZE.y / 2,
+}
 MILITARY_TOKEN_SIZE: [2]f32 : {44 * MILITARY_TRACK_SCALE, 88 * MILITARY_TRACK_SCALE}
 CONFLICT_PAWN_SIZE: [2]f32 = {36 * MILITARY_TRACK_SCALE, 72 * MILITARY_TRACK_SCALE}
 PROGRESS_TOKEN_DIAMETER: f32 : 72 * MILITARY_TRACK_SCALE
-draw_military_track :: proc(midpoint: [2]f32, ui_state: ^UIState) {
-	rl.DrawTexturePro(
-		military_track_texture,
-		{0, 0, 3000, 900},
-		{midpoint.x, midpoint.y, MILITARY_TRACK_SIZE.x, MILITARY_TRACK_SIZE.y},
-		MILITARY_TRACK_SIZE / 2,
-		0,
-		rl.WHITE,
+append_military_track_elements :: proc(ui_state: ^UIState) {
+	//the track itself
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .Visual,
+			texture = military_track_texture,
+			dest_midpoint = MILITARY_TRACK_MIDPOINT,
+			dest_size = MILITARY_TRACK_SIZE,
+		},
 	)
-
+	//military tokens on the track
+	token_texture: rl.Texture2D
+	token_midpoint: [2]f32
+	token_rotation: f32
 	for token in ui_state.game.military_tokens_available {
-		texture: rl.Texture2D
-		position: [2]f32
-		rotation: f32
 		switch token {
 		case .P1_2:
 			{
-				texture = military_token_2_texture
-				position = midpoint + {-145, 73} * MILITARY_TRACK_SCALE
-				rotation = -90
+				token_texture = military_token_2_texture
+				token_midpoint = MILITARY_TRACK_MIDPOINT + {-145, 73} * MILITARY_TRACK_SCALE
+				token_rotation = -90
 			}
 		case .P1_5:
 			{
-				texture = military_token_5_texture
-				position = midpoint + {-260, 73} * MILITARY_TRACK_SCALE
-				rotation = -90
+				token_texture = military_token_5_texture
+				token_midpoint = MILITARY_TRACK_MIDPOINT + {-260, 73} * MILITARY_TRACK_SCALE
+				token_rotation = -90
 			}
 		case .P2_2:
 			{
-				texture = military_token_2_texture
-				position = midpoint + {145, 73} * MILITARY_TRACK_SCALE
-				rotation = 90
+				token_texture = military_token_2_texture
+				token_midpoint = MILITARY_TRACK_MIDPOINT + {145, 73} * MILITARY_TRACK_SCALE
+				token_rotation = 90
 			}
 		case .P2_5:
 			{
-				texture = military_token_5_texture
-				position = midpoint + {260, 73} * MILITARY_TRACK_SCALE
-				rotation = 90
+				token_texture = military_token_5_texture
+				token_midpoint = MILITARY_TRACK_MIDPOINT + {260, 73} * MILITARY_TRACK_SCALE
+				token_rotation = 90
 			}
-		}
-		rl.DrawTexturePro(
-			texture,
-			{0, 0, f32(texture.width), f32(texture.height)},
-			{position.x, position.y, MILITARY_TOKEN_SIZE.x, MILITARY_TOKEN_SIZE.y},
-			MILITARY_TOKEN_SIZE / 2,
-			rotation,
-			rl.WHITE,
-		)
-	}
-
-	pawn_offset: f32 = f32(ui_state.game.military_track * 37) * MILITARY_TRACK_SCALE
-	rl.DrawTexturePro(
-		conflict_pawn_texture,
-		{0, 0, f32(conflict_pawn_texture.width), f32(conflict_pawn_texture.height)},
-		{
-			midpoint.x + pawn_offset,
-			midpoint.y + 15 * MILITARY_TRACK_SCALE,
-			CONFLICT_PAWN_SIZE.x,
-			CONFLICT_PAWN_SIZE.y,
-		},
-		CONFLICT_PAWN_SIZE / 2,
-		0,
-		rl.WHITE,
-	)
-
-	token_spacing: f32 = PROGRESS_TOKEN_DIAMETER + 4 * MILITARY_TRACK_SCALE
-	token_size: [2]f32 = {PROGRESS_TOKEN_DIAMETER, PROGRESS_TOKEN_DIAMETER}
-	token_offset: f32 = -2 * token_spacing
-	for token in ui_state.game.progress_tokens_available {
-		texture := progress_token_textures[token]
-		texture_mid_pos: [2]f32 = {
-			midpoint.x + token_offset,
-			midpoint.y - 67 * MILITARY_TRACK_SCALE,
-		}
-		rl.DrawTexturePro(
-			texture,
-			{0, 0, f32(texture.width), f32(texture.height)},
-			{
-				texture_mid_pos.x,
-				texture_mid_pos.y,
-				PROGRESS_TOKEN_DIAMETER,
-				PROGRESS_TOKEN_DIAMETER,
-			},
-			token_size / 2,
-			180,
-			rl.WHITE,
-		)
-		if ui_state.ui_element_list_dirty {
-			texture_top_left_pos := texture_mid_pos - token_size / 2
-			hitbox_rect: rl.Rectangle = {
-				texture_top_left_pos.x,
-				texture_top_left_pos.y,
-				PROGRESS_TOKEN_DIAMETER,
-				PROGRESS_TOKEN_DIAMETER,
-			}
-			append(
-				&ui_state.ui_element_list,
-				UIElement{label = .ProgressToken, progress_token = token, hitbox = hitbox_rect},
-			)
-		}
-		token_offset += token_spacing
-	}
-}
-
-COIN_DIAMETER: f32 : 110
-COIN_FONT_SIZE: i32 : 90
-COIN_FONT_OUTLINE_SIZE: f32 : 4
-coin_font: rl.Font
-draw_player_coins :: proc(position: [2]f32, player: swd.Player_ID, ui_state: ^UIState) {
-	rl.DrawTexturePro(
-		coin_texture,
-		{0, 0, f32(coin_texture.width), f32(coin_texture.height)},
-		{position.x, position.y, COIN_DIAMETER, COIN_DIAMETER},
-		{COIN_DIAMETER / 2, COIN_DIAMETER / 2},
-		0,
-		rl.WHITE,
-	)
-	if ui_state.ui_element_list_dirty {
-		texture_top_left_pos := position - {COIN_DIAMETER / 2, COIN_DIAMETER / 2}
-		hitbox_rect: rl.Rectangle = {
-			texture_top_left_pos.x,
-			texture_top_left_pos.y,
-			COIN_DIAMETER,
-			COIN_DIAMETER,
 		}
 		append(
 			&ui_state.ui_element_list,
-			UIElement{label = .DiscardForCoinConfirm, hitbox = hitbox_rect},
+			UIElement {
+				label = .Visual,
+				texture = token_texture,
+				dest_midpoint = token_midpoint,
+				dest_size = MILITARY_TOKEN_SIZE,
+				rotation = token_rotation,
+			},
 		)
 	}
-	COIN_FONT_SIZE: i32 = 90
-	offsets: [4][2]f32 = {
-		{-COIN_FONT_OUTLINE_SIZE, -COIN_FONT_OUTLINE_SIZE},
-		{COIN_FONT_OUTLINE_SIZE, -COIN_FONT_OUTLINE_SIZE},
-		{-COIN_FONT_OUTLINE_SIZE, COIN_FONT_OUTLINE_SIZE},
-		{COIN_FONT_OUTLINE_SIZE, COIN_FONT_OUTLINE_SIZE},
-	}
-	value: cstring = fmt.ctprintf("%d", ui_state.game.player_states[player].coins)
-	textSize := rl.MeasureTextEx(coin_font, value, f32(COIN_FONT_SIZE), 0)
-	textPosition := position - textSize / 2
-	textColour := rl.WHITE
-	borderColour := rl.BLACK
-	for offset in offsets {
-		rl.DrawTextEx(
-			coin_font,
-			value,
-			textPosition - offset,
-			f32(COIN_FONT_SIZE),
-			0,
-			borderColour,
+	//draw the conflict pawn
+	pawn_offset: f32 = f32(ui_state.game.military_track * 37) * MILITARY_TRACK_SCALE
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .Visual,
+			texture = conflict_pawn_texture,
+			dest_midpoint = MILITARY_TRACK_MIDPOINT + {pawn_offset, 15 * MILITARY_TRACK_SCALE},
+			dest_size = CONFLICT_PAWN_SIZE,
+		},
+	)
+	//available progress tokens
+	token_spacing: f32 = PROGRESS_TOKEN_DIAMETER + 4 * MILITARY_TRACK_SCALE
+	token_size: [2]f32 = {PROGRESS_TOKEN_DIAMETER, PROGRESS_TOKEN_DIAMETER}
+	token_offset: [2]f32 = {-2 * token_spacing, -67 * MILITARY_TRACK_SCALE}
+
+	for token_taken, i in ui_state.game.progress_token_taken {
+		if token_taken {continue}
+		token_to_draw := ui_state.game.progress_tokens_available[i]
+		token_midpoint = MILITARY_TRACK_MIDPOINT + token_offset + {f32(i) * token_spacing, 0}
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = .ProgressToken,
+				progress_token = token_to_draw,
+				texture = progress_token_textures[token_to_draw],
+				dest_midpoint = token_midpoint,
+				dest_size = token_size,
+				hitbox_midpoint = token_midpoint,
+				hitbox_size = token_size,
+				rotation = 180,
+			},
 		)
 	}
-	rl.DrawTextEx(coin_font, value, textPosition, f32(COIN_FONT_SIZE), 0, textColour)
 }
 
-game_object_sort :: proc(i, j: swd.Object_Name) -> bool {
-	return i32(i) < i32(j)
-}
-
-draw_player_wonders :: proc(ui_state: ^UIState) {
+append_player_wonder_elements :: proc(ui_state: ^UIState) {
 	gap: f32 = 5
-	p1_wonders := swd.get_all_player_wonders(ui_state.game.player_states[.P1])
-	slice.sort_by(p1_wonders[:], game_object_sort)
-	for wonder, i in p1_wonders {
+	for wonder, i in ui_state.game.player_states[.P1].wonders {
 		row, col := math.divmod(i, 2)
 		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
 		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-		draw_card_texture(wonder, {x, y}, WONDER_SIZE)
-		if ui_state.ui_element_list_dirty {
-			ui_element := UIElement {
-				label       = .GameObject,
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = .GameObject,
 				game_object = wonder,
-				hitbox      = {x, y, WONDER_SIZE.x, WONDER_SIZE.y},
-			}
-			append(&ui_state.ui_element_list, ui_element)
-		}
+				dest_midpoint = {x, y},
+				dest_size = WONDER_SIZE,
+				hitbox_midpoint = {x, y},
+				hitbox_size = WONDER_SIZE,
+			},
+		)
 	}
-	p2_wonders := swd.get_all_player_wonders(ui_state.game.player_states[.P2])
-	slice.sort_by(p2_wonders[:], game_object_sort)
-	for wonder, i in p2_wonders {
+	for wonder, i in ui_state.game.player_states[.P2].wonders {
 		row, col := math.divmod(i, 2)
 		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
 		x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5
 		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-		draw_card_texture(wonder, {x, y}, WONDER_SIZE)
-		if ui_state.ui_element_list_dirty {
-			ui_element := UIElement {
-				label       = .GameObject,
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = .GameObject,
 				game_object = wonder,
-				hitbox      = {x, y, WONDER_SIZE.x, WONDER_SIZE.y},
-			}
-			append(&ui_state.ui_element_list, ui_element)
+				dest_midpoint = {x, y},
+				dest_size = WONDER_SIZE,
+				hitbox_midpoint = {x, y},
+				hitbox_size = WONDER_SIZE,
+			},
+		)
+	}
+}
+
+append_player_card_elements :: proc(ui_state: ^UIState) {
+
+}
+
+COIN_DIAMETER: f32 : 110
+COIN_FONT_SIZE: f32 : 90
+COIN_FONT_OUTLINE_SIZE: f32 : 4
+COIN_FONT_COLOUR: rl.Color : rl.WHITE
+main_font: rl.Font
+append_player_coin_elements :: proc(ui_state: ^UIState) {
+	coin_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 0.75
+	coin_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER
+	p1_label: UILabel = .Visual
+	p2_label: UILabel = .Visual
+	switch ui_state.game.turn_player {
+	case .P1:
+		{p1_label = .DiscardForCoinConfirm}
+	case .P2:
+		{p2_label = .DiscardForCoinConfirm}
+	}
+
+	p1_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 - coin_x_offset, coin_y}
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = p1_label,
+			texture = coin_texture,
+			dest_midpoint = p1_coin_position,
+			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
+			hitbox_midpoint = p1_coin_position,
+			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+		},
+	)
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .Text,
+			text = fmt.ctprintf("%d", ui_state.game.player_states[.P1].coins),
+			font = main_font,
+			font_size = COIN_FONT_SIZE,
+			text_colour = COIN_FONT_COLOUR,
+			dest_midpoint = p1_coin_position,
+		},
+	)
+
+	p2_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 + coin_x_offset, coin_y}
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = p2_label,
+			texture = coin_texture,
+			dest_midpoint = p2_coin_position,
+			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
+			hitbox_midpoint = p2_coin_position,
+			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+		},
+	)
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .Text,
+			text = fmt.ctprintf("%d", ui_state.game.player_states[.P2].coins),
+			font = main_font,
+			font_size = COIN_FONT_SIZE,
+			text_colour = COIN_FONT_COLOUR,
+			dest_midpoint = p2_coin_position,
+		},
+	)
+}
+
+append_turn_player_text :: proc(ui_state: ^UIState) {
+	turn_player_text: cstring
+	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 2.75
+	text_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER
+	text_midpoint: [2]f32
+	text_colour: rl.Color
+	switch ui_state.game.turn_player {
+	case .P1:
+		{
+			turn_player_text = "P1's Turn!"
+			text_midpoint = {STARTING_WINDOW_WIDTH / 2 - text_x_offset, text_y}
+			text_colour = rl.BLUE
+		}
+	case .P2:
+		{
+			turn_player_text = "P2's Turn!"
+			text_midpoint = {STARTING_WINDOW_WIDTH / 2 + text_x_offset, text_y}
+			text_colour = rl.RED
 		}
 	}
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .Text,
+			text = turn_player_text,
+			font = main_font,
+			font_size = 60,
+			text_colour = text_colour,
+			dest_midpoint = text_midpoint,
+		},
+	)
+}
+
+update_ui_element_list :: proc(ui_state: ^UIState) {
+	if !ui_state.ui_element_list_dirty {return}
+	clear(&ui_state.ui_element_list)
+	append_wonder_draft_elements(ui_state)
+	append_player_wonder_elements(ui_state)
+	append_card_structure_elements(ui_state)
+	append_military_track_elements(ui_state)
+	append_player_coin_elements(ui_state)
+	append_player_card_elements(ui_state)
+	append_turn_player_text(ui_state)
 }
 
 draw_frame :: proc(ui_state: ^UIState) {
@@ -533,31 +653,13 @@ draw_frame :: proc(ui_state: ^UIState) {
 	rl.ClearBackground(BACKGROUND_COLOUR)
 	rl.BeginMode2D(camera)
 
-	if ui_state.ui_element_list_dirty {
-		clear(&ui_state.ui_element_list)
-	}
 	if ui_state.valid_moves_dirty {
 		ui_state.valid_moves_dirty = false
 		ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
 	}
 
-	card_structure_midpoint: [2]f32 = {STARTING_WINDOW_WIDTH / 2, 1.57 * CARD_SIZE.y + 5}
-	draw_card_structure(card_structure_midpoint, ui_state.game.age, ui_state)
-
-	military_track_midpoint: [2]f32 = {
-		STARTING_WINDOW_WIDTH / 2,
-		STARTING_WINDOW_HEIGHT - MILITARY_TRACK_SIZE.y / 2,
-	}
-	draw_military_track(military_track_midpoint, ui_state)
-
-	coin_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 2
-	coin_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER
-	p1_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 - coin_x_offset, coin_y}
-	p2_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 + coin_x_offset, coin_y}
-	draw_player_coins(p1_coin_position, .P1, ui_state)
-	draw_player_coins(p2_coin_position, .P2, ui_state)
-
-	draw_player_wonders(ui_state)
+	update_ui_element_list(ui_state)
+	for element in ui_state.ui_element_list {draw_element(element)}
 
 	for col in 0 ..< 4 {
 		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50

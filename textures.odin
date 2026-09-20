@@ -176,7 +176,7 @@ load_textures :: proc() {
 	coin_texture = rl.LoadTexture("images/coin.png")
 	rl.SetTextureFilter(coin_texture, .BILINEAR)
 
-	coin_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
+	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
 
 	rounded_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
 }
