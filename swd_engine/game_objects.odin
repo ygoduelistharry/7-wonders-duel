@@ -656,6 +656,14 @@ objects_db: [Object_Name]Object = {
 	},
 }
 
+game_object_is_card :: proc(game_object: Object_Name) -> bool {
+	if objects_db[game_object].colour == .Wonder {return false} else {return true}
+}
+
+game_object_is_wonder :: proc(game_object: Object_Name) -> bool {
+	if objects_db[game_object].colour == .Wonder {return true} else {return false}
+}
+
 get_all_age1_card_names :: proc() -> [23]Object_Name {
 	names: [23]Object_Name
 	idx: int = 0

@@ -113,7 +113,7 @@ UIState :: struct {
 	ui_element_list_dirty:         bool,
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
-	object_chosen:                 Maybe(swd.Object_Name),
+	last_selected_object:          Maybe(swd.Object_Name),
 }
 print_ui_element_name :: proc(ui_element: UIElement) {
 	#partial switch ui_element.label {
@@ -177,7 +177,6 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	case .Choose_Wonder_To_Draft:
 		{
 			for move in ui_state.valid_moves {
-				if move.move_kind != .Draft_Wonder {continue}
 				if move.wonder_name == ui_element_clicked.game_object {
 					selected_move = move
 					break
@@ -186,45 +185,53 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 		}
 	case .Choose_Object_To_Construct_Or_Discard:
 		{
-			if ui_state.object_chosen == nil {
-				if ui_element_clicked.label != .GameObject {break}
-				for move in ui_state.valid_moves {
-					if move.wonder_name == ui_element_clicked.game_object {
-						ui_state.object_chosen = move.wonder_name
-						break
+			#partial switch ui_element_clicked.label {
+			case .GameObject:
+				{
+					selected_object := ui_element_clicked.game_object
+
+					if swd.game_object_is_card(selected_object) {
+						ui_state.last_selected_object = selected_object
+						ui_state.ui_element_list_dirty = true
 					}
-					if move.card_name == ui_element_clicked.game_object {
-						ui_state.object_chosen = move.card_name
-						break
+
+					if swd.game_object_is_wonder(selected_object) {
+						for move in ui_state.valid_moves {
+							if move.wonder_name == selected_object &&
+							   move.card_name == ui_state.last_selected_object {
+								selected_move = move
+								break
+							}
+						}
 					}
 				}
-			} else {
-				if swd.objects_db[ui_state.object_chosen.?].colour == .Wonder {
+			case .DiscardForCoinConfirm:
+				{
 					for move in ui_state.valid_moves {
-						if move.wonder_name == ui_state.object_chosen &&
-						   move.card_name == ui_element_clicked.game_object {
-							selected_move = move
-							break
-						}
-					}
-				} else if ui_element_clicked.label == .DiscardForCoinConfirm {
-					for move in ui_state.valid_moves {
-						if move.move_kind == .Discard_For_Coins &&
-						   move.card_name == ui_state.object_chosen.? {
-							selected_move = move
-							break
-						}
-					}
-				} else if ui_element_clicked.label == .ConstructCardConfirm {
-					for move in ui_state.valid_moves {
-						if move.move_kind == .Construct_Card &&
-						   move.card_name == ui_state.object_chosen.? {
+						if move.card_name == ui_state.last_selected_object &&
+						   move.move_kind == .Discard_For_Coins {
 							selected_move = move
 							break
 						}
 					}
 				}
-				ui_state.object_chosen = nil
+			case .ConstructCardConfirm:
+				{
+					for move in ui_state.valid_moves {
+						if move.card_name == ui_state.last_selected_object &&
+						   move.move_kind == .Construct_Card {
+							selected_move = move
+							break
+						}
+					}
+				}
+			case:
+				{
+					if ui_state.last_selected_object != nil {
+						ui_state.last_selected_object = nil
+						ui_state.ui_element_list_dirty = true
+					}
+				}
 			}
 		}
 	case .Choose_Progress_Token:
@@ -242,6 +249,7 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	}
 	if selected_move.move_kind != .None {
 		swd.execute_move_safe(selected_move, ui_state.game)
+		ui_state.last_selected_object = nil
 		ui_state.ui_element_list_dirty = true
 		ui_state.valid_moves_dirty = true
 	}
@@ -513,6 +521,17 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 				hitbox_size = WONDER_SIZE,
 			},
 		)
+		if int(ui_state.game.player_states[.P1].cards_tucked[i]) != 0 {
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .Visual,
+					texture = built_icon_texture,
+					dest_midpoint = {x, y},
+					dest_size = 50,
+				},
+			)
+		}
 	}
 	for wonder, i in ui_state.game.player_states[.P2].wonders {
 		row, col := math.divmod(i, 2)
@@ -530,6 +549,17 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 				hitbox_size = WONDER_SIZE,
 			},
 		)
+		if int(ui_state.game.player_states[.P2].cards_tucked[i]) != 0 {
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .Visual,
+					texture = built_icon_texture,
+					dest_midpoint = {x, y},
+					dest_size = 50,
+				},
+			)
+		}
 	}
 }
 
@@ -543,8 +573,8 @@ COIN_FONT_OUTLINE_SIZE: f32 : 4
 COIN_FONT_COLOUR: rl.Color : rl.WHITE
 main_font: rl.Font
 append_player_coin_elements :: proc(ui_state: ^UIState) {
-	coin_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 0.75
-	coin_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER
+	coin_x_offset := MILITARY_TRACK_SIZE.x / 3 + 20
+	coin_y := STARTING_WINDOW_HEIGHT - 2.3 * COIN_DIAMETER
 	p1_label: UILabel = .Visual
 	p2_label: UILabel = .Visual
 	switch ui_state.game.turn_player {
@@ -603,6 +633,30 @@ append_player_coin_elements :: proc(ui_state: ^UIState) {
 	)
 }
 
+append_build_icon_elements :: proc(ui_state: ^UIState) {
+	if ui_state.last_selected_object == nil {return}
+	icon_x_offset := MILITARY_TRACK_SIZE.x / 3 + 20
+	icon_y := STARTING_WINDOW_HEIGHT - 3.5 * COIN_DIAMETER
+	icon_position: [2]f32
+	switch ui_state.game.turn_player {
+	case .P1:
+		{icon_position = {STARTING_WINDOW_WIDTH / 2 - icon_x_offset, icon_y}}
+	case .P2:
+		{icon_position = {STARTING_WINDOW_WIDTH / 2 + icon_x_offset, icon_y}}
+	}
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .ConstructCardConfirm,
+			texture = build_icon_texture,
+			dest_midpoint = icon_position,
+			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
+			hitbox_midpoint = icon_position,
+			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+		},
+	)
+}
+
 append_turn_player_text :: proc(ui_state: ^UIState) {
 	turn_player_text: cstring
 	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 2.75
@@ -644,6 +698,7 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_card_structure_elements(ui_state)
 	append_military_track_elements(ui_state)
 	append_player_coin_elements(ui_state)
+	append_build_icon_elements(ui_state)
 	append_player_card_elements(ui_state)
 	append_turn_player_text(ui_state)
 }

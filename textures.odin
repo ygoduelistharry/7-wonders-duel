@@ -155,6 +155,8 @@ conflict_pawn_texture: rl.Texture2D
 military_token_2_texture: rl.Texture2D
 military_token_5_texture: rl.Texture2D
 coin_texture: rl.Texture2D
+build_icon_texture: rl.Texture2D
+built_icon_texture: rl.Texture2D
 
 load_textures :: proc() {
 	card_atlases = load_object_atlases()
@@ -174,6 +176,12 @@ load_textures :: proc() {
 	rl.SetTextureFilter(military_token_5_texture, .BILINEAR)
 
 	coin_texture = rl.LoadTexture("images/coin.png")
+	rl.SetTextureFilter(coin_texture, .BILINEAR)
+
+	build_icon_texture = rl.LoadTexture("images/build.png")
+	rl.SetTextureFilter(coin_texture, .BILINEAR)
+
+	built_icon_texture = rl.LoadTexture("images/built.png")
 	rl.SetTextureFilter(coin_texture, .BILINEAR)
 
 	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
