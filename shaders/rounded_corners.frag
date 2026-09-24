@@ -10,58 +10,25 @@ uniform sampler2D texture0;
 
 // Custom uniform values
 uniform vec4 spriteUVBounds;
+uniform float cornerRadius;
 
 // Output fragment color
 out vec4 finalColor;
 
 void main()
 {
-    // Texel color fetching from texture sampler
-    vec4 texelColor=texture(texture0,fragTexCoord);
-    vec2 localUV=(fragTexCoord-spriteUVBounds.xy)/(spriteUVBounds.zw-spriteUVBounds.xy);
-    vec2 quadrantUV=abs(localUV-vec2(.5,.5));
-    float r=.08;
-    // NOTE: Implement here your fragment shader code^
-    
-    if(length(quadrantUV-vec2(0.5-r,0.5-r))>r&&quadrantUV.x>0.5-r&&quadrantUV.y>0.5-r){
-        texelColor.a=0;
-    }
-    // final color is the color from the texture
-    //    times the tint color (colDiffuse)
-    //    times the fragment color (interpolated vertex color)
-    finalColor=texelColor;
+    vec4 texelColor = texture(texture0, fragTexCoord);
+
+    vec2 uvSize = spriteUVBounds.zw - spriteUVBounds.xy;
+    vec2 cardSize = uvSize * vec2(textureSize(texture0, 0));
+    vec2 pixelPos = ((fragTexCoord - spriteUVBounds.xy) / uvSize) * cardSize;
+
+    vec2 quadrantPixel = abs(pixelPos - (cardSize * 0.5)) - ((cardSize * 0.5) - vec2(cornerRadius));
+
+    float isCorner = step(0.0, quadrantPixel.x) * step(0.0, quadrantPixel.y);
+
+    float alpha = 1.0 - smoothstep(cornerRadius - 1.0, cornerRadius, length(quadrantPixel));
+    texelColor.a *= mix(1.0, alpha, isCorner);
+
+    finalColor = texelColor * fragColor;
 }
-
-// #version 330
-
-// // Input vertex attributes (from vertex shader)
-// in vec2 fragTexCoord;
-// in vec4 fragColor;
-// in vec4 fragPosition:
-
-// // Input uniform values
-// uniform sampler2D texture0;
-// uniform vec4 colDiffuse;
-
-// // Output fragment color
-// out vec4 finalColor;
-
-// // NOTE: Add your custom variables here
-
-// void main()
-// {
-    
-    //         // Texel color fetching from texture sampler
-    //         vec4 texelColor=texture(texture0,fragTexCoord);
-    //         // NOTE: Implement here your fragment shader code
-    
-    //         float radius=.1;
-    
-    //         float dist=sdRoundedBox(texture0,texture0,vec4(radius))
-    
-    //         // final color is the color from the texture
-    //         //    times the tint color (colDiffuse)
-    //         //    times the fragment color (interpolated vertex color)
-    
-    //         finalColor=vec4(texelColor.rgb,texelColor.a*dist);
-// }

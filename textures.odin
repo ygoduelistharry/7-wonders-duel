@@ -186,7 +186,23 @@ load_textures :: proc() {
 
 	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
 
-	rounded_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
+}
+
+round_corners_shader: rl.Shader
+round_corners_sprite_uv_bounds_loc: i32
+corner_radius: f32 = 50.0
+load_shaders :: proc() {
+	round_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
+	rl.SetShaderValue(
+		round_corners_shader,
+		rl.GetShaderLocation(round_corners_shader, "cornerRadius"),
+		&corner_radius,
+		.FLOAT,
+	)
+	round_corners_sprite_uv_bounds_loc = rl.GetShaderLocation(
+		round_corners_shader,
+		"spriteUVBounds",
+	)
 }
 
 
@@ -211,7 +227,6 @@ get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 }
 
 
-rounded_corners_shader: rl.Shader
 draw_card_texture :: proc(
 	name: swd.Object_Name,
 	mid_pos: [2]f32,
@@ -228,12 +243,12 @@ draw_card_texture :: proc(
 		(source_rect.y + source_rect.height) / f32(atlas.height),
 	}
 	rl.SetShaderValue(
-		rounded_corners_shader,
-		rl.GetShaderLocation(rounded_corners_shader, "spriteUVBounds"),
+		round_corners_shader,
+		round_corners_sprite_uv_bounds_loc,
 		&normalised_source_rect_bounds,
 		.VEC4,
 	)
-	rl.BeginShaderMode(rounded_corners_shader)
+	rl.BeginShaderMode(round_corners_shader)
 	rl.DrawTexturePro(
 		atlas,
 		source_rect,
@@ -255,12 +270,12 @@ draw_card_back :: proc(
 	texture := card_back_textures[card_back]
 	normalised_source_rect_bounds: [4]f32 = {0, 0, 1, 1}
 	rl.SetShaderValue(
-		rounded_corners_shader,
-		rl.GetShaderLocation(rounded_corners_shader, "spriteUVBounds"),
+		round_corners_shader,
+		round_corners_sprite_uv_bounds_loc,
 		&normalised_source_rect_bounds,
 		.VEC4,
 	)
-	rl.BeginShaderMode(rounded_corners_shader)
+	rl.BeginShaderMode(round_corners_shader)
 	rl.DrawTexturePro(
 		texture,
 		{0, 0, f32(texture.width), f32(texture.height)},

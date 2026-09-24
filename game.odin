@@ -763,6 +763,7 @@ main :: proc() {
 
 	window_setup()
 	load_textures()
+	load_shaders()
 
 	for !rl.WindowShouldClose() {
 		handle_input(&ui_state)
