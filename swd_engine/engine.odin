@@ -397,6 +397,13 @@ Move :: struct {
 	chosen_player: Maybe(Player_ID),
 }
 
+get_selectable_cards :: proc(game: Game) -> (selectable_cards: [dynamic; 8]Object_Name) {
+	for slot in game.boards[game.age] {
+		if slot.selectable {append(&selectable_cards, slot.card_in_slot)}
+	}
+	return
+}
+
 get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	if game.completed {return {}}
 	turn_player_id := game.turn_player

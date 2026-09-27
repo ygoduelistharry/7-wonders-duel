@@ -2,8 +2,8 @@ package seven_wonders_duel
 
 import "core:fmt"
 import "core:math"
+import linalg "core:math/linalg"
 import "core:mem"
-import "core:slice"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
@@ -50,14 +50,19 @@ UIElement :: struct {
 	//texture data
 	texture:         rl.Texture2D,
 	source_rect:     rl.Rectangle,
-	//engine related objects
-	game_object:     swd.Object_Name,
-	progress_token:  swd.Progress_Token,
+	tint:            Maybe(rl.Color),
+	//shader parameters
+	border_width:    f32,
+	border_colour:   rl.Color,
+	corner_radius:   f32,
 	//text
 	text:            cstring,
 	font:            rl.Font,
 	font_size:       f32,
 	text_colour:     rl.Color,
+	//engine related objects
+	game_object:     swd.Object_Name,
+	progress_token:  swd.Progress_Token,
 }
 get_hitbox :: proc(ui_element: UIElement) -> rl.Rectangle {
 	hitbox_topleft := ui_element.hitbox_midpoint - ui_element.hitbox_size / 2
@@ -69,11 +74,11 @@ get_hitbox :: proc(ui_element: UIElement) -> rl.Rectangle {
 	}
 	return hitbox
 }
+
 draw_element :: proc(ui_element: UIElement) {
+	tint := ui_element.tint.? or_else rl.WHITE
 	if ui_element.label == .None {return}
-	if ui_element.label == .GameObject {
-		draw_card_texture(ui_element.game_object, ui_element.dest_midpoint, ui_element.dest_size)
-	} else if ui_element.label == .Text {
+	if ui_element.label == .Text {
 		text_size := rl.MeasureTextEx(ui_element.font, ui_element.text, ui_element.font_size, 0)
 		text_position := ui_element.dest_midpoint - text_size / 2
 		rl.DrawTextEx(
@@ -95,22 +100,56 @@ draw_element :: proc(ui_element: UIElement) {
 			ui_element.dest_size.x,
 			ui_element.dest_size.y,
 		}
+		if ui_element.border_width + ui_element.corner_radius > 0 {
+			rl.BeginShaderMode(rounded_rect_shader)
+			sub_rect_uv_bounds := get_sub_rect_uv_bounds(ui_element.texture, source_rect)
+			corner_radius := ui_element.corner_radius
+			border_width := ui_element.border_width
+			border_colour := linalg.array_cast(ui_element.border_colour, f32) / 255.0
+			rl.SetShaderValue(
+				rounded_rect_shader,
+				rounded_rect_shader_sprite_uv_bounds_loc,
+				&sub_rect_uv_bounds,
+				.VEC4,
+			)
+			rl.SetShaderValue(
+				rounded_rect_shader,
+				rounded_rect_shader_radius_loc,
+				&corner_radius,
+				.FLOAT,
+			)
+			rl.SetShaderValue(
+				rounded_rect_shader,
+				rounded_rect_shader_border_width_loc,
+				&border_width,
+				.FLOAT,
+			)
+			rl.SetShaderValue(
+				rounded_rect_shader,
+				rounded_rect_shader_border_color_loc,
+				&border_colour,
+				.VEC4,
+			)
+		}
 		rl.DrawTexturePro(
 			ui_element.texture,
 			source_rect,
 			dest_rect,
 			ui_element.dest_size / 2,
 			ui_element.rotation,
-			rl.WHITE,
+			tint,
 		)
+		if ui_element.border_width + ui_element.corner_radius > 0 {
+			rl.EndShaderMode()
+		}
 	}
 }
+
 UIState :: struct {
 	game:                          ^swd.Game,
 	last_mouse_world_position:     [2]f32,
 	ui_element_clicked_last_frame: UIElement,
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
-	ui_element_list_dirty:         bool,
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
 	last_selected_object:          Maybe(swd.Object_Name),
@@ -128,28 +167,28 @@ print_ui_element_name :: proc(ui_element: UIElement) {
 
 handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsKeyReleased(.Q) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.age = .DraftWonders
+		ui_state.valid_moves_dirty = true
 	}
 	if rl.IsKeyReleased(.W) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.age = .Age1
+		ui_state.valid_moves_dirty = true
 	}
 	if rl.IsKeyReleased(.E) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.age = .Age2
+		ui_state.valid_moves_dirty = true
 	}
 	if rl.IsKeyReleased(.R) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.age = .Age3
+		ui_state.valid_moves_dirty = true
 	}
 	if rl.IsKeyReleased(.S) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.military_track -= 1
+		ui_state.valid_moves_dirty = true
 	}
 	if rl.IsKeyReleased(.D) {
-		ui_state.ui_element_list_dirty = true
 		ui_state.game.military_track += 1
+		ui_state.valid_moves_dirty = true
 	}
 
 	ui_state.ui_element_clicked_last_frame = {}
@@ -166,6 +205,7 @@ handle_input :: proc(ui_state: ^UIState) {
 		}
 		print_ui_element_name(ui_state.ui_element_clicked_last_frame)
 		handle_click(ui_state.ui_element_clicked_last_frame, ui_state)
+		ui_state.valid_moves_dirty = true
 	}
 
 	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
@@ -192,7 +232,6 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 
 					if swd.game_object_is_card(selected_object) {
 						ui_state.last_selected_object = selected_object
-						ui_state.ui_element_list_dirty = true
 					}
 
 					if swd.game_object_is_wonder(selected_object) {
@@ -229,7 +268,6 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 				{
 					if ui_state.last_selected_object != nil {
 						ui_state.last_selected_object = nil
-						ui_state.ui_element_list_dirty = true
 					}
 				}
 			}
@@ -250,12 +288,75 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	if selected_move.move_kind != .None {
 		swd.execute_move_safe(selected_move, ui_state.game)
 		ui_state.last_selected_object = nil
-		ui_state.ui_element_list_dirty = true
-		ui_state.valid_moves_dirty = true
 	}
 }
 
 
+CARD_SIZE: [2]f32 : {120, 190}
+WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
+create_game_object_ui_element :: proc(
+	game_object: swd.Object_Name,
+	dest_midpoint: [2]f32,
+	rotation: f32 = 0,
+	tint: rl.Color = rl.WHITE,
+	border_width: f32 = 0,
+	border_color: rl.Color = rl.WHITE,
+) -> UIElement {
+	dest_size: [2]f32
+	element := UIElement {
+		label           = .GameObject,
+		game_object     = game_object,
+		source_rect     = get_game_object_sub_texture_rect(game_object),
+		hitbox_midpoint = dest_midpoint,
+		dest_midpoint   = dest_midpoint,
+		texture         = game_object_atlases[object_texture_info_db[game_object].game_object_back],
+		corner_radius   = 50,
+		tint            = tint,
+		border_width    = border_width,
+		border_colour   = border_color,
+	}
+	if swd.game_object_is_card(game_object) {
+		element.dest_size = CARD_SIZE
+		element.hitbox_size = CARD_SIZE
+	} else {
+		element.dest_size = WONDER_SIZE
+		element.hitbox_size = WONDER_SIZE
+	}
+	return element
+}
+
+
+append_wonder_draft_elements :: proc(ui_state: ^UIState) {
+	if ui_state.game.age != .DraftWonders {return}
+	for wonder, i in ui_state.game.wonders_to_draft {
+		if i in ui_state.game.wonder_ids_draftable {
+			grid_pos: [2]f32
+			switch i % 4 {
+			case 0:
+				{grid_pos = {-1, -1}}
+			case 1:
+				{grid_pos = {1, -1}}
+			case 2:
+				{grid_pos = {-1, 1}}
+			case 3:
+				{grid_pos = {1, 1}}
+			}
+			midpoint := CARD_STRUCTURE_MIDPOINT + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
+			append(
+				&ui_state.ui_element_list,
+				create_game_object_ui_element(
+					wonder,
+					midpoint,
+					border_width = 4,
+					border_color = rl.WHITE,
+				),
+			)
+		}
+	}
+}
+
+
+CARD_STRUCTURE_MIDPOINT: [2]f32 : {STARTING_WINDOW_WIDTH / 2, 1.57 * CARD_SIZE.y + 5}
 card_structure_grids: [swd.Age][20][2]int = #partial {
 	.Age1 = {
 		{-5, 2},
@@ -325,46 +426,6 @@ card_structure_grids: [swd.Age][20][2]int = #partial {
 	},
 }
 
-CARD_SIZE: [2]f32 : {120, 190}
-WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
-
-game_object_sort :: proc(i, j: swd.Object_Name) -> bool {
-	return i32(i) < i32(j)
-}
-
-
-CARD_STRUCTURE_MIDPOINT: [2]f32 : {STARTING_WINDOW_WIDTH / 2, 1.57 * CARD_SIZE.y + 5}
-append_wonder_draft_elements :: proc(ui_state: ^UIState) {
-	if ui_state.game.age != .DraftWonders {return}
-	for wonder, i in ui_state.game.wonders_to_draft {
-		if i in ui_state.game.wonder_ids_draftable {
-			grid_pos: [2]f32
-			switch i % 4 {
-			case 0:
-				{grid_pos = {-1, -1}}
-			case 1:
-				{grid_pos = {1, -1}}
-			case 2:
-				{grid_pos = {-1, 1}}
-			case 3:
-				{grid_pos = {1, 1}}
-			}
-			midpoint := CARD_STRUCTURE_MIDPOINT + grid_pos * (WONDER_SIZE / 2 + {2.0, 2.0})
-			append(
-				&ui_state.ui_element_list,
-				UIElement {
-					label = .GameObject,
-					game_object = wonder,
-					hitbox_midpoint = midpoint,
-					hitbox_size = WONDER_SIZE,
-					dest_midpoint = midpoint,
-					dest_size = WONDER_SIZE,
-				},
-			)
-		}
-	}
-}
-
 append_card_structure_elements :: proc(ui_state: ^UIState) {
 	if ui_state.game.age == .DraftWonders {return}
 	y_offset: f32 = CARD_SIZE.y * 1.0 / 2.8
@@ -379,17 +440,10 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 		if slot.face_up {
 			append(
 				&ui_state.ui_element_list,
-				UIElement {
-					label = .GameObject,
-					game_object = slot.card_in_slot,
-					dest_midpoint = midpoint,
-					dest_size = CARD_SIZE,
-					hitbox_midpoint = midpoint,
-					hitbox_size = CARD_SIZE,
-				},
+				create_game_object_ui_element(slot.card_in_slot, midpoint),
 			)
 		} else {
-			back := object_texture_info_db[slot.card_in_slot].card_back
+			back := object_texture_info_db[slot.card_in_slot].game_object_back
 			back_texture := card_back_textures[back]
 			append(
 				&ui_state.ui_element_list,
@@ -400,6 +454,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 					dest_size = CARD_SIZE,
 					hitbox_midpoint = midpoint,
 					hitbox_size = CARD_SIZE,
+					corner_radius = 50,
 				},
 			)
 		}
@@ -506,59 +561,44 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 
 append_player_wonder_elements :: proc(ui_state: ^UIState) {
 	gap: f32 = 5
-	for wonder, i in ui_state.game.player_states[.P1].wonders {
-		row, col := math.divmod(i, 2)
-		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
-		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-		append(
-			&ui_state.ui_element_list,
-			UIElement {
-				label = .GameObject,
-				game_object = wonder,
-				dest_midpoint = {x, y},
-				dest_size = WONDER_SIZE,
-				hitbox_midpoint = {x, y},
-				hitbox_size = WONDER_SIZE,
-			},
-		)
-		if int(ui_state.game.player_states[.P1].cards_tucked[i]) != 0 {
+	for player_id in swd.Player_ID {
+		for wonder, i in ui_state.game.player_states[player_id].wonders {
+			row, col := math.divmod(i, 2)
+			x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
+			if player_id == .P2 {x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5}
+			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
+			wonder_cost := swd.calculate_object_cost(wonder, player_id, ui_state.game^)
+			tint := rl.WHITE
+			border_width: f32 = 0.0
+
+			if ui_state.last_selected_object != nil {
+				if wonder_cost.total_coin_cost >= ui_state.game.player_states[player_id].coins ||
+				   ui_state.game.turn_player != player_id {
+					tint = rl.GRAY
+				} else {
+					border_width = 4.0
+				}
+			}
 			append(
 				&ui_state.ui_element_list,
-				UIElement {
-					label = .Visual,
-					texture = built_icon_texture,
-					dest_midpoint = {x, y},
-					dest_size = 50,
-				},
+				create_game_object_ui_element(
+					wonder,
+					{x, y},
+					tint = tint,
+					border_width = border_width,
+				),
 			)
-		}
-	}
-	for wonder, i in ui_state.game.player_states[.P2].wonders {
-		row, col := math.divmod(i, 2)
-		x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
-		x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5
-		y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-		append(
-			&ui_state.ui_element_list,
-			UIElement {
-				label = .GameObject,
-				game_object = wonder,
-				dest_midpoint = {x, y},
-				dest_size = WONDER_SIZE,
-				hitbox_midpoint = {x, y},
-				hitbox_size = WONDER_SIZE,
-			},
-		)
-		if int(ui_state.game.player_states[.P2].cards_tucked[i]) != 0 {
-			append(
-				&ui_state.ui_element_list,
-				UIElement {
-					label = .Visual,
-					texture = built_icon_texture,
-					dest_midpoint = {x, y},
-					dest_size = 50,
-				},
-			)
+			if int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0 {
+				append(
+					&ui_state.ui_element_list,
+					UIElement {
+						label = .Visual,
+						texture = built_icon_texture,
+						dest_midpoint = {x, y},
+						dest_size = 50,
+					},
+				)
+			}
 		}
 	}
 }
@@ -691,7 +731,6 @@ append_turn_player_text :: proc(ui_state: ^UIState) {
 }
 
 update_ui_element_list :: proc(ui_state: ^UIState) {
-	if !ui_state.ui_element_list_dirty {return}
 	clear(&ui_state.ui_element_list)
 	append_wonder_draft_elements(ui_state)
 	append_player_wonder_elements(ui_state)
@@ -708,23 +747,16 @@ draw_frame :: proc(ui_state: ^UIState) {
 	rl.ClearBackground(BACKGROUND_COLOUR)
 	rl.BeginMode2D(camera)
 
-	if ui_state.valid_moves_dirty {
-		ui_state.valid_moves_dirty = false
-		ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
-	}
-
-	update_ui_element_list(ui_state)
 	for element in ui_state.ui_element_list {draw_element(element)}
 
-	for col in 0 ..< 4 {
-		x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
-		for row in 0 ..< 8 {
-			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
-			draw_card_back(.Age1, {x, y}, CARD_SIZE)
-		}
-	}
+	// for col in 0 ..< 4 {
+	// 	x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
+	// 	for row in 0 ..< 8 {
+	// 		y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
+	// 		draw_card_back(.Age1, {x, y}, CARD_SIZE)
+	// 	}
+	// }
 
-	ui_state.valid_moves_dirty = false
 
 	rl.EndMode2D()
 	rl.EndDrawing()
@@ -756,9 +788,8 @@ main :: proc() {
 
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 	ui_state: UIState = {
-		game                  = &game,
-		ui_element_list_dirty = true,
-		valid_moves_dirty     = true,
+		game              = &game,
+		valid_moves_dirty = true,
 	}
 
 	window_setup()
@@ -774,6 +805,12 @@ main :: proc() {
 			)
 			camera.offset = get_screen_centre()
 		}
+		if ui_state.valid_moves_dirty {
+			ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
+			ui_state.valid_moves_dirty = false
+		}
+
+		update_ui_element_list(&ui_state)
 		draw_frame(&ui_state)
 		free_all(context.temp_allocator)
 	}

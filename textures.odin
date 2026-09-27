@@ -3,7 +3,7 @@ package seven_wonders_duel
 import swd "swd_engine"
 import rl "vendor:raylib"
 
-Card_Back :: enum {
+Game_Object_Kind :: enum {
 	Wonders,
 	Age1,
 	Age2,
@@ -11,8 +11,7 @@ Card_Back :: enum {
 	Guilds,
 }
 
-Card_Atlases :: [Card_Back]rl.Texture2D
-load_object_atlases :: proc() -> (atlases: Card_Atlases) {
+load_object_atlases :: proc() -> (atlases: [Game_Object_Kind]rl.Texture2D) {
 	atlases[.Wonders] = rl.LoadTexture("images/wonders.jpg")
 	atlases[.Age1] = rl.LoadTexture("images/age1.jpg")
 	atlases[.Age2] = rl.LoadTexture("images/age2.jpg")
@@ -25,8 +24,8 @@ load_object_atlases :: proc() -> (atlases: Card_Atlases) {
 }
 
 Object_Texture_Info :: struct {
-	card_back:      Card_Back,
-	atlas_position: [2]int,
+	game_object_back: Game_Object_Kind,
+	atlas_position:   [2]int,
 }
 object_texture_info_db: [swd.Object_Name]Object_Texture_Info = {
 	.The_Colossus          = {.Wonders, {0, 0}},
@@ -116,8 +115,7 @@ object_texture_info_db: [swd.Object_Name]Object_Texture_Info = {
 	.Shipowners_Guild      = {.Guilds, {0, 6}},
 }
 
-Card_Back_Textures :: [Card_Back]rl.Texture2D
-load_card_back_textures :: proc() -> (textures: Card_Back_Textures) {
+load_card_back_textures :: proc() -> (textures: [Game_Object_Kind]rl.Texture2D) {
 	textures[.Age1] = rl.LoadTexture("images/age1_back.png")
 	textures[.Age2] = rl.LoadTexture("images/age2_back.png")
 	textures[.Age3] = rl.LoadTexture("images/age3_back.png")
@@ -129,8 +127,7 @@ load_card_back_textures :: proc() -> (textures: Card_Back_Textures) {
 	return textures
 }
 
-Progress_Token_Textures :: [swd.Progress_Token]rl.Texture2D
-load_progress_token_textures :: proc() -> (textures: Progress_Token_Textures) {
+load_progress_token_textures :: proc() -> (textures: [swd.Progress_Token]rl.Texture2D) {
 	textures[.Agriculture] = rl.LoadTexture("images/agriculture.png")
 	textures[.Architechture] = rl.LoadTexture("images/architecture.png")
 	textures[.Economy] = rl.LoadTexture("images/economy.png")
@@ -147,9 +144,9 @@ load_progress_token_textures :: proc() -> (textures: Progress_Token_Textures) {
 	return textures
 }
 
-card_atlases: Card_Atlases
-card_back_textures: Card_Back_Textures
-progress_token_textures: Progress_Token_Textures
+game_object_atlases: [Game_Object_Kind]rl.Texture2D
+card_back_textures: [Game_Object_Kind]rl.Texture2D
+progress_token_textures: [swd.Progress_Token]rl.Texture2D
 military_track_texture: rl.Texture2D
 conflict_pawn_texture: rl.Texture2D
 military_token_2_texture: rl.Texture2D
@@ -159,7 +156,7 @@ build_icon_texture: rl.Texture2D
 built_icon_texture: rl.Texture2D
 
 load_textures :: proc() {
-	card_atlases = load_object_atlases()
+	game_object_atlases = load_object_atlases()
 	card_back_textures = load_card_back_textures()
 	progress_token_textures = load_progress_token_textures()
 
@@ -188,28 +185,35 @@ load_textures :: proc() {
 
 }
 
-round_corners_shader: rl.Shader
-round_corners_sprite_uv_bounds_loc: i32
-corner_radius: f32 = 50.0
+rounded_rect_shader: rl.Shader
+rounded_rect_shader_sprite_uv_bounds_loc: i32
+rounded_rect_shader_radius_loc: i32
+rounded_rect_shader_border_width_loc: i32
+rounded_rect_shader_border_color_loc: i32
 load_shaders :: proc() {
-	round_corners_shader = rl.LoadShader("", "shaders/rounded_corners.frag")
-	rl.SetShaderValue(
-		round_corners_shader,
-		rl.GetShaderLocation(round_corners_shader, "cornerRadius"),
-		&corner_radius,
-		.FLOAT,
-	)
-	round_corners_sprite_uv_bounds_loc = rl.GetShaderLocation(
-		round_corners_shader,
+	rounded_rect_shader = rl.LoadShader("", "shaders/rounded_rectangle.frag")
+	rounded_rect_shader_sprite_uv_bounds_loc = rl.GetShaderLocation(
+		rounded_rect_shader,
 		"spriteUVBounds",
 	)
+	rounded_rect_shader_radius_loc = rl.GetShaderLocation(rounded_rect_shader, "radius")
+	rounded_rect_shader_border_width_loc = rl.GetShaderLocation(rounded_rect_shader, "borderWidth")
+	rounded_rect_shader_border_color_loc = rl.GetShaderLocation(rounded_rect_shader, "borderColor")
 }
 
+get_sub_rect_uv_bounds :: proc(texture: rl.Texture, source_rect: rl.Rectangle) -> [4]f32 {
+	return {
+		source_rect.x / f32(texture.width),
+		source_rect.y / f32(texture.height),
+		(source_rect.x + source_rect.width) / f32(texture.width),
+		(source_rect.y + source_rect.height) / f32(texture.height),
+	}
+}
 
-get_card_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
+get_game_object_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	key := object_texture_info_db[name]
 	width, height: f32
-	switch key.card_back {
+	switch key.game_object_back {
 	case .Wonders:
 		{width, height = 858, 552}
 	case .Guilds:
@@ -234,21 +238,21 @@ draw_card_texture :: proc(
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 ) {
-	atlas := card_atlases[object_texture_info_db[name].card_back]
-	source_rect := get_card_sub_texture_rect(name)
+	atlas := game_object_atlases[object_texture_info_db[name].game_object_back]
+	source_rect := get_game_object_sub_texture_rect(name)
 	normalised_source_rect_bounds: [4]f32 = {
 		source_rect.x / f32(atlas.width),
 		source_rect.y / f32(atlas.height),
 		(source_rect.x + source_rect.width) / f32(atlas.width),
 		(source_rect.y + source_rect.height) / f32(atlas.height),
 	}
-	rl.SetShaderValue(
-		round_corners_shader,
-		round_corners_sprite_uv_bounds_loc,
-		&normalised_source_rect_bounds,
-		.VEC4,
-	)
-	rl.BeginShaderMode(round_corners_shader)
+	// rl.SetShaderValue(
+	// 	rounded_rect_shader,
+	// 	rounded_rect_sprite_uv_bounds_loc,
+	// 	&normalised_source_rect_bounds,
+	// 	.VEC4,
+	// )
+	rl.BeginShaderMode(rounded_rect_shader)
 	rl.DrawTexturePro(
 		atlas,
 		source_rect,
@@ -261,7 +265,7 @@ draw_card_texture :: proc(
 }
 
 draw_card_back :: proc(
-	card_back: Card_Back,
+	card_back: Game_Object_Kind,
 	mid_pos: [2]f32,
 	size: [2]f32,
 	rotation: f32 = 0,
@@ -269,13 +273,13 @@ draw_card_back :: proc(
 ) {
 	texture := card_back_textures[card_back]
 	normalised_source_rect_bounds: [4]f32 = {0, 0, 1, 1}
-	rl.SetShaderValue(
-		round_corners_shader,
-		round_corners_sprite_uv_bounds_loc,
-		&normalised_source_rect_bounds,
-		.VEC4,
-	)
-	rl.BeginShaderMode(round_corners_shader)
+	// rl.SetShaderValue(
+	// 	rounded_rect_shader,
+	// 	rounded_rect_sprite_uv_bounds_loc,
+	// 	&normalised_source_rect_bounds,
+	// 	.VEC4,
+	// )
+	rl.BeginShaderMode(rounded_rect_shader)
 	rl.DrawTexturePro(
 		texture,
 		{0, 0, f32(texture.width), f32(texture.height)},

@@ -1,0 +1,21 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: gram://docs/debugger
+[
+  {
+    "label": "Debug Odin App",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$GRAM_WORKTREE_ROOT/debug_build.exe",
+    "cwd": "$GRAM_WORKTREE_ROOT",
+    "build": {
+      "command": "odin",
+      "args": ["build", ".", "-debug", "-o:none", "-out:debug_build.exe"],
+    },
+    "initCommands": [
+      "settings set target.max-children-count 256",
+      "settings set target.prefer-dynamic-value run-target",
+    ],
+  },
+]
