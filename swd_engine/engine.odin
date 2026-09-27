@@ -290,13 +290,15 @@ Object_Real_Cost :: struct {
 }
 calculate_object_cost :: proc(
 	object_name: Object_Name,
-	player_id: Player_ID,
 	game: Game,
+	player_id: Player_ID = nil,
 ) -> Object_Real_Cost {
 
+	p_id: Player_ID
+	if player_id == nil {p_id = game.turn_player}
 	object := objects_db[object_name]
-	player := game.player_states[player_id]
-	opponent := game.player_states[Player_ID(-1 * int(player_id))]
+	player := game.player_states[p_id]
+	opponent := game.player_states[Player_ID(-1 * int(p_id))]
 
 	// check for free linking symbol
 	if object.cost.free_construction_symbol in player.linking_symbols {
@@ -429,7 +431,7 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 			if count_constructed_wonders(game) < 7 {
 				for wonder, idx in turn_player.wonders {
 					if int(turn_player.cards_tucked[idx]) != 0 {continue}
-					wonder_cost := calculate_object_cost(wonder, turn_player_id, game)
+					wonder_cost := calculate_object_cost(wonder, game)
 					if wonder_cost.total_coin_cost <= turn_player.coins {
 						append(
 							&base_wonder_moves,
@@ -457,7 +459,7 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 						},
 					)
 					// add moves to construct cards
-					card_cost := calculate_object_cost(slot.card_in_slot, turn_player_id, game)
+					card_cost := calculate_object_cost(slot.card_in_slot, game)
 					if card_cost.total_coin_cost <= turn_player.coins {
 						append(
 							&valid_moves,

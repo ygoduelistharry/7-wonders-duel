@@ -75,6 +75,12 @@ get_hitbox :: proc(ui_element: UIElement) -> rl.Rectangle {
 	return hitbox
 }
 
+SELECTION_COLOUR: rl.Color : rl.YELLOW
+PLAYER_COLOUR: #sparse[swd.Player_ID]rl.Color = {
+	.P1 = rl.BLUE,
+	.P2 = rl.RED,
+}
+
 draw_element :: proc(ui_element: UIElement) {
 	tint := ui_element.tint.? or_else rl.WHITE
 	if ui_element.label == .None {return}
@@ -300,7 +306,7 @@ create_game_object_ui_element :: proc(
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 	border_width: f32 = 0,
-	border_color: rl.Color = rl.WHITE,
+	border_colour: rl.Color = rl.WHITE,
 ) -> UIElement {
 	dest_size: [2]f32
 	element := UIElement {
@@ -313,7 +319,7 @@ create_game_object_ui_element :: proc(
 		corner_radius   = 50,
 		tint            = tint,
 		border_width    = border_width,
-		border_colour   = border_color,
+		border_colour   = border_colour,
 	}
 	if swd.game_object_is_card(game_object) {
 		element.dest_size = CARD_SIZE
@@ -348,7 +354,7 @@ append_wonder_draft_elements :: proc(ui_state: ^UIState) {
 					wonder,
 					midpoint,
 					border_width = 4,
-					border_color = rl.WHITE,
+					border_colour = PLAYER_COLOUR[ui_state.game.turn_player],
 				),
 			)
 		}
@@ -438,9 +444,24 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 			CARD_STRUCTURE_MIDPOINT + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
 		if slot.card_in_slot == {} {continue}
 		if slot.face_up {
+			border_colour: rl.Color
+			border_width: f32
+			if slot.selectable {
+				border_width = 4.0
+			}
+			if ui_state.last_selected_object == slot.card_in_slot {
+				border_colour = rl.YELLOW
+			} else {
+				border_colour = PLAYER_COLOUR[ui_state.game.turn_player]
+			}
 			append(
 				&ui_state.ui_element_list,
-				create_game_object_ui_element(slot.card_in_slot, midpoint),
+				create_game_object_ui_element(
+					slot.card_in_slot,
+					midpoint,
+					border_width = border_width,
+					border_colour = border_colour,
+				),
 			)
 		} else {
 			back := object_texture_info_db[slot.card_in_slot].game_object_back
@@ -567,12 +588,12 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
 			if player_id == .P2 {x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5}
 			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-			wonder_cost := swd.calculate_object_cost(wonder, player_id, ui_state.game^)
+			wonder_cost := swd.calculate_object_cost(wonder, ui_state.game^)
 			tint := rl.WHITE
 			border_width: f32 = 0.0
 
 			if ui_state.last_selected_object != nil {
-				if wonder_cost.total_coin_cost >= ui_state.game.player_states[player_id].coins ||
+				if wonder_cost.total_coin_cost > ui_state.game.player_states[player_id].coins ||
 				   ui_state.game.turn_player != player_id {
 					tint = rl.GRAY
 				} else {
@@ -615,86 +636,113 @@ main_font: rl.Font
 append_player_coin_elements :: proc(ui_state: ^UIState) {
 	coin_x_offset := MILITARY_TRACK_SIZE.x / 3 + 20
 	coin_y := STARTING_WINDOW_HEIGHT - 2.3 * COIN_DIAMETER
-	p1_label: UILabel = .Visual
-	p2_label: UILabel = .Visual
-	switch ui_state.game.turn_player {
-	case .P1:
-		{p1_label = .DiscardForCoinConfirm}
-	case .P2:
-		{p2_label = .DiscardForCoinConfirm}
+
+	for player in swd.Player_ID {
+		coin_position: [2]f32
+		switch player {
+		case .P1:
+			{
+				coin_position = {STARTING_WINDOW_WIDTH / 2 - coin_x_offset, coin_y}
+			}
+		case .P2:
+			{
+				coin_position = {STARTING_WINDOW_WIDTH / 2 + coin_x_offset, coin_y}
+			}
+		}
+		label: UILabel = .Visual
+		border_width: f32
+		if ui_state.game.turn_player == player {
+			label = .DiscardForCoinConfirm
+			border_width = 4.0
+		}
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = label,
+				texture = coin_texture,
+				dest_midpoint = coin_position,
+				dest_size = {COIN_DIAMETER, COIN_DIAMETER},
+				hitbox_midpoint = coin_position,
+				hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+				border_width = border_width,
+				border_colour = PLAYER_COLOUR[player],
+				corner_radius = f32(coin_texture.height / 2),
+			},
+		)
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = .Text,
+				text = fmt.ctprintf("%d", ui_state.game.player_states[player].coins),
+				font = main_font,
+				font_size = COIN_FONT_SIZE,
+				text_colour = COIN_FONT_COLOUR,
+				dest_midpoint = coin_position,
+			},
+		)
 	}
-
-	p1_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 - coin_x_offset, coin_y}
-	append(
-		&ui_state.ui_element_list,
-		UIElement {
-			label = p1_label,
-			texture = coin_texture,
-			dest_midpoint = p1_coin_position,
-			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
-			hitbox_midpoint = p1_coin_position,
-			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
-		},
-	)
-	append(
-		&ui_state.ui_element_list,
-		UIElement {
-			label = .Text,
-			text = fmt.ctprintf("%d", ui_state.game.player_states[.P1].coins),
-			font = main_font,
-			font_size = COIN_FONT_SIZE,
-			text_colour = COIN_FONT_COLOUR,
-			dest_midpoint = p1_coin_position,
-		},
-	)
-
-	p2_coin_position: [2]f32 = {STARTING_WINDOW_WIDTH / 2 + coin_x_offset, coin_y}
-	append(
-		&ui_state.ui_element_list,
-		UIElement {
-			label = p2_label,
-			texture = coin_texture,
-			dest_midpoint = p2_coin_position,
-			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
-			hitbox_midpoint = p2_coin_position,
-			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
-		},
-	)
-	append(
-		&ui_state.ui_element_list,
-		UIElement {
-			label = .Text,
-			text = fmt.ctprintf("%d", ui_state.game.player_states[.P2].coins),
-			font = main_font,
-			font_size = COIN_FONT_SIZE,
-			text_colour = COIN_FONT_COLOUR,
-			dest_midpoint = p2_coin_position,
-		},
-	)
 }
 
 append_build_icon_elements :: proc(ui_state: ^UIState) {
-	if ui_state.last_selected_object == nil {return}
 	icon_x_offset := MILITARY_TRACK_SIZE.x / 3 + 20
 	icon_y := STARTING_WINDOW_HEIGHT - 3.5 * COIN_DIAMETER
+	turn_player := ui_state.game.turn_player
 	icon_position: [2]f32
-	switch ui_state.game.turn_player {
-	case .P1:
-		{icon_position = {STARTING_WINDOW_WIDTH / 2 - icon_x_offset, icon_y}}
-	case .P2:
-		{icon_position = {STARTING_WINDOW_WIDTH / 2 + icon_x_offset, icon_y}}
+	for player in swd.Player_ID {
+		switch player {
+		case .P1:
+			{icon_position = {STARTING_WINDOW_WIDTH / 2 - icon_x_offset, icon_y}}
+		case .P2:
+			{icon_position = {STARTING_WINDOW_WIDTH / 2 + icon_x_offset, icon_y}}
+		}
+		build_cost: swd.Object_Real_Cost
+		turn_player_coins := ui_state.game.player_states[turn_player].coins
+		tint := rl.GRAY
+		border_width: f32 = 0.0
+		text_colour := rl.RED
+		display_cost: bool
+		if player == turn_player && ui_state.last_selected_object != nil {
+			build_cost = swd.calculate_object_cost(
+				ui_state.last_selected_object.?,
+				ui_state.game^,
+				player,
+			)
+			display_cost = true
+			if build_cost.total_coin_cost <= turn_player_coins {
+				tint = rl.WHITE
+				border_width = 4.0
+				text_colour = rl.WHITE
+			}
+		}
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				label = .ConstructCardConfirm,
+				texture = build_icon_texture,
+				dest_midpoint = icon_position,
+				dest_size = {COIN_DIAMETER, COIN_DIAMETER},
+				hitbox_midpoint = icon_position,
+				hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+				tint = tint,
+				border_width = border_width,
+				border_colour = PLAYER_COLOUR[turn_player],
+				corner_radius = f32(build_icon_texture.height / 2),
+			},
+		)
+		if display_cost {
+			append(
+				&ui_state.ui_element_list,
+				UIElement {
+					label = .Text,
+					text = fmt.ctprintf("-%d", build_cost.total_coin_cost),
+					font = main_font,
+					font_size = 70,
+					text_colour = text_colour,
+					dest_midpoint = icon_position,
+				},
+			)
+		}
 	}
-	append(
-		&ui_state.ui_element_list,
-		UIElement {
-			label = .ConstructCardConfirm,
-			texture = build_icon_texture,
-			dest_midpoint = icon_position,
-			dest_size = {COIN_DIAMETER, COIN_DIAMETER},
-			hitbox_midpoint = icon_position,
-			hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
-		},
-	)
 }
 
 append_turn_player_text :: proc(ui_state: ^UIState) {
