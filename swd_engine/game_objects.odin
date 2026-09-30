@@ -25,71 +25,91 @@ Object :: struct {
 }
 
 // need to include The Messe and The Statue of Liberty at some point
+// Object_Name enum is sorted by a convenient UI display order
 Object_Name :: enum {
+	// brown wood
 	Lumber_Yard = 1,
 	Logging_Camp,
+	Sawmill,
+	// brown clay
 	Clay_Pool,
 	Clay_Pit,
+	Brickyard,
+	// brown stone
 	Quarry,
 	Stone_Pit,
+	Shelf_Quarry,
+	// grey glass
 	Glassworks,
+	Glassblower,
+	// grey paper
 	Press,
-	Guard_Tower,
-	Workshop,
-	Apothecary,
+	Drying_Room,
+	// yellow discounts
 	Stone_Reserve,
 	Clay_Reserve,
 	Wood_Reserve,
-	Stable,
-	Garrison,
-	Palisade,
-	Scriptorium,
-	Pharmacist,
-	Theatre,
-	Altar,
-	Baths,
-	Tavern,
-	Sawmill,
-	Brickyard,
-	Shelf_Quarry,
-	Glassblower,
-	Drying_Room,
-	Walls,
 	Forum,
 	Caravansery,
 	Customs_House,
+	// yellow money
+	Tavern,
+	Brewery,
+	// yellow vp
+	Chamber_of_Commerce,
+	Port,
+	Armory,
+	Lighthouse,
+	Arena,
+	// blue
+	Theatre,
+	Altar,
+	Baths,
 	Courthouse,
-	Horse_Breeders,
-	Barracks,
-	Archery_Range,
-	Parade_Ground,
-	Library,
-	Dispensary,
-	School,
-	Laboratory,
 	Statue,
 	Temple,
 	Aqueduct,
 	Rostrum,
-	Brewery,
-	Arsenal,
-	Pretorium,
-	Academy,
-	Study,
-	Chamber_of_Commerce,
-	Port,
-	Armory,
 	Palace,
 	Town_Hall,
 	Obelisk,
-	Circus,
-	University,
-	Observatory,
 	Gardens,
 	Pantheon,
 	Senate,
-	Lighthouse,
-	Arena,
+	// military
+	Guard_Tower,
+	Stable,
+	Garrison,
+	Palisade,
+	Walls,
+	Horse_Breeders,
+	Barracks,
+	Archery_Range,
+	Parade_Ground,
+	Arsenal,
+	Pretorium,
+	Fortifications,
+	Siege_Workshop,
+	Circus,
+	// green frame
+	Workshop,
+	Laboratory,
+	// green wheel
+	Apothecary,
+	School,
+	// green quill
+	Scriptorium,
+	Library,
+	// green mortal and pestle
+	Pharmacist,
+	Dispensary,
+	// green sundial
+	Academy,
+	Study,
+	// green astrolabe
+	University,
+	Observatory,
+	// guilds
 	Merchants_Guild,
 	Shipowners_Guild,
 	Builders_Guild,
@@ -97,8 +117,7 @@ Object_Name :: enum {
 	Scientists_Guild,
 	Moneylenders_Guild,
 	Tacticians_Guild,
-	Fortifications,
-	Siege_Workshop,
+	// wonders
 	The_Appian_Way,
 	The_Great_Lighthouse,
 	The_Sphinx,
@@ -259,7 +278,7 @@ objects_db: [Object_Name]Object = {
 	.Forum = {
 		age = .Age2,
 		colour = .Yellow,
-		cost = {coins = 3, resources = #partial{.Clay = 1}},
+		cost = {coins = 3, resources = #partial{.Wood = 1, .Clay = 1, .Stone = 1}},
 		variable_grey_resource_produced = 1,
 	},
 	.Caravansery = {
@@ -666,12 +685,12 @@ game_object_is_wonder :: proc(game_object: Object_Name) -> bool {
 
 get_all_age1_card_names :: proc() -> [23]Object_Name {
 	names: [23]Object_Name
-	idx: int = 0
+	count: int = 0
 	for card in Object_Name {
-		if (idx >= 23) {return names}
+		if (count >= 23) {return names}
 		if (objects_db[card].age == .Age1) {
-			names[idx] = card
-			idx += 1
+			names[count] = card
+			count += 1
 		}
 	}
 	return names
@@ -679,12 +698,12 @@ get_all_age1_card_names :: proc() -> [23]Object_Name {
 
 get_all_age2_card_names :: proc() -> [23]Object_Name {
 	names: [23]Object_Name
-	idx: int = 0
+	count: int = 0
 	for card in Object_Name {
-		if (idx >= 23) {return names}
+		if (count >= 23) {return names}
 		if (objects_db[card].age == .Age2) {
-			names[idx] = card
-			idx += 1
+			names[count] = card
+			count += 1
 		}
 	}
 	return names
@@ -692,12 +711,12 @@ get_all_age2_card_names :: proc() -> [23]Object_Name {
 
 get_all_age3_non_guild_card_names :: proc() -> [20]Object_Name {
 	names: [20]Object_Name
-	idx: int = 0
+	count: int = 0
 	for card in Object_Name {
-		if (idx >= 20) {return names}
+		if (count >= 20) {return names}
 		if (objects_db[card].age == .Age3 && objects_db[card].colour != .Purple) {
-			names[idx] = card
-			idx += 1
+			names[count] = card
+			count += 1
 		}
 	}
 	return names
@@ -705,12 +724,12 @@ get_all_age3_non_guild_card_names :: proc() -> [20]Object_Name {
 
 get_all_guild_card_names :: proc() -> [7]Object_Name {
 	names: [7]Object_Name
-	idx: int = 0
+	count: int = 0
 	for card in Object_Name {
-		if (idx >= 7) {return names}
+		if (count >= 7) {return names}
 		if (objects_db[card].colour == .Purple) {
-			names[idx] = card
-			idx += 1
+			names[count] = card
+			count += 1
 		}
 	}
 	return names
@@ -718,12 +737,12 @@ get_all_guild_card_names :: proc() -> [7]Object_Name {
 
 get_all_wonder_names :: proc() -> [12]Object_Name {
 	names: [12]Object_Name
-	idx: int = 0
+	count: int = 0
 	for card in Object_Name {
-		if (idx >= 12) {return names}
+		if (count >= 12) {return names}
 		if (objects_db[card].colour == .Wonder) {
-			names[idx] = card
-			idx += 1
+			names[count] = card
+			count += 1
 		}
 	}
 	return names

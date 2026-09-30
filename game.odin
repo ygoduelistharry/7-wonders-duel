@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:math"
 import linalg "core:math/linalg"
 import "core:mem"
+import "core:slice"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
@@ -624,8 +625,42 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 	}
 }
 
-append_player_card_elements :: proc(ui_state: ^UIState) {
 
+append_player_card_elements :: proc(ui_state: ^UIState) {
+	card_names: [dynamic; 30]swd.Object_Name
+	for player in swd.Player_ID {
+		card_names = ui_state.game.player_states[player].cards_constructed
+		slice.sort_by(card_names[:], proc(i, j: swd.Object_Name) -> bool {
+			return int(i) < int(j)
+		})
+
+		last_col := -1
+		curr_col := 0
+		row := 0
+		x_base := CARD_SIZE.x / 2 + 50
+		if player == .P2 {
+			x_base = STARTING_WINDOW_WIDTH - CARD_SIZE.x * 3.5 - 50
+		}
+		for card in card_names {
+			switch int(card) {
+			case 1 ..< 20:
+				{curr_col = 0}
+			case 20 ..< 41:
+				{curr_col = 1}
+			case 41 ..< 55:
+				{curr_col = 2}
+			case 55 ..< len(swd.Object_Name):
+				{curr_col = 3}
+			}
+			if curr_col != last_col {
+				row = 0
+				last_col = curr_col
+			} else {row += 1}
+			x := x_base + f32(curr_col) * CARD_SIZE.x
+			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
+			append(&ui_state.ui_element_list, create_game_object_ui_element(card, {x, y}))
+		}
+	}
 }
 
 COIN_DIAMETER: f32 : 110
@@ -796,14 +831,6 @@ draw_frame :: proc(ui_state: ^UIState) {
 	rl.BeginMode2D(camera)
 
 	for element in ui_state.ui_element_list {draw_element(element)}
-
-	// for col in 0 ..< 4 {
-	// 	x := CARD_SIZE.x / 2 + f32(col) * CARD_SIZE.x + 50
-	// 	for row in 0 ..< 8 {
-	// 		y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
-	// 		draw_card_back(.Age1, {x, y}, CARD_SIZE)
-	// 	}
-	// }
 
 
 	rl.EndMode2D()
