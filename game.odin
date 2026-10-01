@@ -161,6 +161,7 @@ UIState :: struct {
 	valid_moves_dirty:             bool,
 	last_selected_object:          Maybe(swd.Object_Name),
 	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
+	cost_overlay_on:               bool,
 }
 print_ui_element_name :: proc(ui_element: UIElement) {
 	#partial switch ui_element.label {
@@ -197,6 +198,9 @@ handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsKeyReleased(.D) {
 		ui_state.game.military_track += 1
 		ui_state.valid_moves_dirty = true
+	}
+	if rl.IsKeyReleased(.TAB) {
+		ui_state.cost_overlay_on = !ui_state.cost_overlay_on
 	}
 
 	ui_state.ui_element_clicked_last_frame = {}
@@ -333,6 +337,24 @@ create_game_object_ui_element :: proc(
 	return element
 }
 
+create_text_ui_element :: proc(
+	text: cstring,
+	size: f32,
+	dest_midpoint: [2]f32,
+	colour: rl.Color,
+	font: Maybe(rl.Font) = nil,
+) -> (
+	element: UIElement,
+) {
+	element.label = .Text
+	element.dest_midpoint = dest_midpoint
+	element.text = text
+	element.font_size = size
+	element.text_colour = colour
+	element.font = font.? or_else main_font
+	return
+}
+
 
 append_wonder_draft_elements :: proc(ui_state: ^UIState) {
 	if ui_state.game.age != .DraftWonders {return}
@@ -439,34 +461,63 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 	y_offset: f32 = CARD_SIZE.y * 1.0 / 2.8
 	x_offset: f32 = CARD_SIZE.x * 1.0 / 2.0 + 3
 	layout_grid := card_structure_grids[ui_state.game.age]
+	turn_player := ui_state.game.turn_player
 	for i := 19; i >= 0; i -= 1 {
 		grid_pos := layout_grid[i]
 		slot := ui_state.game.boards[ui_state.game.age][i]
 		midpoint: [2]f32 =
 			CARD_STRUCTURE_MIDPOINT + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
-		if slot.card_in_slot == {} {continue}
+		show_cost: bool
+		card := slot.card_in_slot
+		if card == {} {continue}
 		if slot.face_up {
 			border_colour: rl.Color
 			border_width: f32
 			if slot.selectable {
 				border_width = 4.0
+				if ui_state.cost_overlay_on {show_cost = true}
 			}
-			if ui_state.last_selected_object == slot.card_in_slot {
+			if ui_state.last_selected_object == card {
 				border_colour = rl.YELLOW
 			} else {
-				border_colour = PLAYER_COLOUR[ui_state.game.turn_player]
+				border_colour = PLAYER_COLOUR[turn_player]
 			}
 			append(
 				&ui_state.ui_element_list,
 				create_game_object_ui_element(
-					slot.card_in_slot,
+					card,
 					midpoint,
 					border_width = border_width,
 					border_colour = border_colour,
 				),
 			)
+			if show_cost {
+				append(
+					&ui_state.ui_element_list,
+					UIElement {
+						label = .Visual,
+						texture = coin_texture,
+						dest_midpoint = midpoint,
+						dest_size = 40,
+					},
+				)
+				append(
+					&ui_state.ui_element_list,
+					UIElement {
+						label = .Text,
+						dest_midpoint = midpoint,
+						text = fmt.ctprintf(
+							"%d",
+							ui_state.object_costs[turn_player][card].total_coin_cost,
+						),
+						font = main_font,
+						font_size = 30,
+						text_colour = rl.WHITE,
+					},
+				)
+			}
 		} else {
-			back := object_texture_info_db[slot.card_in_slot].game_object_back
+			back := object_texture_info_db[card].game_object_back
 			back_texture := card_back_textures[back]
 			append(
 				&ui_state.ui_element_list,
@@ -591,16 +642,31 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			if player_id == .P2 {x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5}
 			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
 			wonder_cost := ui_state.object_costs[player_id][wonder]
+
+
+			//possible states
+			card_selected := ui_state.last_selected_object != nil
+			can_afford := wonder_cost.can_afford
+			turn_player_owns_wonder := ui_state.game.turn_player == player_id
+			wonder_built := int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0
+			seven_wonders_built := swd.count_constructed_wonders(ui_state.game^) >= 7
+
+			//drawing options
 			tint := rl.WHITE
 			border_width: f32 = 0.0
 
-			if ui_state.last_selected_object != nil {
-				if wonder_cost.can_afford == false || ui_state.game.turn_player != player_id {
+			switch {
+			case (seven_wonders_built && !wonder_built),
+			     (card_selected && (!turn_player_owns_wonder || !can_afford)):
+				{
 					tint = rl.GRAY
-				} else {
+				}
+			case (card_selected && turn_player_owns_wonder && can_afford):
+				{
 					border_width = 4.0
 				}
 			}
+
 			append(
 				&ui_state.ui_element_list,
 				create_game_object_ui_element(
@@ -610,16 +676,43 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 					border_width = border_width,
 				),
 			)
-			if int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0 {
-				append(
-					&ui_state.ui_element_list,
-					UIElement {
-						label = .Visual,
-						texture = built_icon_texture,
-						dest_midpoint = {x, y},
-						dest_size = 50,
-					},
-				)
+
+			switch {
+			case wonder_built:
+				{
+					append(
+						&ui_state.ui_element_list,
+						UIElement {
+							label = .Visual,
+							texture = built_icon_texture,
+							dest_midpoint = {x, y},
+							dest_size = 50,
+						},
+					)
+				}
+			case !seven_wonders_built && ui_state.cost_overlay_on:
+				{
+					append(
+						&ui_state.ui_element_list,
+						UIElement {
+							label = .Visual,
+							texture = coin_texture,
+							dest_midpoint = {x, y},
+							dest_size = 40,
+						},
+					)
+					append(
+						&ui_state.ui_element_list,
+						UIElement {
+							label = .Text,
+							dest_midpoint = {x, y},
+							text = fmt.ctprintf("%d", wonder_cost.total_coin_cost),
+							font = main_font,
+							font_size = 30,
+							text_colour = rl.WHITE,
+						},
+					)
+				}
 			}
 		}
 	}
@@ -870,6 +963,7 @@ main :: proc() {
 	ui_state: UIState = {
 		game              = &game,
 		valid_moves_dirty = true,
+		cost_overlay_on   = true,
 	}
 
 	window_setup()
