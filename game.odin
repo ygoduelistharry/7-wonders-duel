@@ -160,6 +160,7 @@ UIState :: struct {
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
 	last_selected_object:          Maybe(swd.Object_Name),
+	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
 }
 print_ui_element_name :: proc(ui_element: UIElement) {
 	#partial switch ui_element.label {
@@ -212,7 +213,6 @@ handle_input :: proc(ui_state: ^UIState) {
 		}
 		print_ui_element_name(ui_state.ui_element_clicked_last_frame)
 		handle_click(ui_state.ui_element_clicked_last_frame, ui_state)
-		ui_state.valid_moves_dirty = true
 	}
 
 	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
@@ -295,6 +295,7 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	if selected_move.move_kind != .None {
 		swd.execute_move_safe(selected_move, ui_state.game)
 		ui_state.last_selected_object = nil
+		ui_state.valid_moves_dirty = true
 	}
 }
 
@@ -589,13 +590,12 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
 			if player_id == .P2 {x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5}
 			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-			wonder_cost := swd.calculate_object_cost(wonder, ui_state.game^)
+			wonder_cost := ui_state.object_costs[player_id][wonder]
 			tint := rl.WHITE
 			border_width: f32 = 0.0
 
 			if ui_state.last_selected_object != nil {
-				if wonder_cost.total_coin_cost > ui_state.game.player_states[player_id].coins ||
-				   ui_state.game.turn_player != player_id {
+				if wonder_cost.can_afford == false || ui_state.game.turn_player != player_id {
 					tint = rl.GRAY
 				} else {
 					border_width = 4.0
@@ -634,13 +634,22 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 			return int(i) < int(j)
 		})
 
+		x_base: f32
+		switch player {
+		case .P1:
+			{
+				x_base = CARD_SIZE.x / 2 + 50
+			}
+		case .P2:
+			{
+				x_base = STARTING_WINDOW_WIDTH - CARD_SIZE.x * 3.5 - 50
+			}
+		}
+
 		last_col := -1
 		curr_col := 0
 		row := 0
-		x_base := CARD_SIZE.x / 2 + 50
-		if player == .P2 {
-			x_base = STARTING_WINDOW_WIDTH - CARD_SIZE.x * 3.5 - 50
-		}
+
 		for card in card_names {
 			switch int(card) {
 			case 1 ..< 20:
@@ -649,7 +658,7 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 				{curr_col = 1}
 			case 41 ..< 55:
 				{curr_col = 2}
-			case 55 ..< len(swd.Object_Name):
+			case 55 ..< len(swd.Object_Name) + 1:
 				{curr_col = 3}
 			}
 			if curr_col != last_col {
@@ -737,13 +746,9 @@ append_build_icon_elements :: proc(ui_state: ^UIState) {
 		text_colour := rl.RED
 		display_cost: bool
 		if player == turn_player && ui_state.last_selected_object != nil {
-			build_cost = swd.calculate_object_cost(
-				ui_state.last_selected_object.?,
-				ui_state.game^,
-				player,
-			)
+			build_cost = ui_state.object_costs[player][ui_state.last_selected_object.?]
 			display_cost = true
-			if build_cost.total_coin_cost <= turn_player_coins {
+			if build_cost.can_afford {
 				tint = rl.WHITE
 				border_width = 4.0
 				text_colour = rl.WHITE
@@ -881,6 +886,9 @@ main :: proc() {
 			camera.offset = get_screen_centre()
 		}
 		if ui_state.valid_moves_dirty {
+			for player in swd.Player_ID {
+				ui_state.object_costs[player] = swd.get_all_object_costs(ui_state.game^, player)
+			}
 			ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
 			ui_state.valid_moves_dirty = false
 		}

@@ -100,7 +100,7 @@ Object_Name :: enum {
 	// green quill
 	Scriptorium,
 	Library,
-	// green mortal and pestle
+	// green mortar and pestle
 	Pharmacist,
 	Dispensary,
 	// green sundial

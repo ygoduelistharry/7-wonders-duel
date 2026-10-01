@@ -287,22 +287,22 @@ Object_Real_Cost :: struct {
 	total_coin_cost:     int,
 	traded_coin_cost:    int,
 	linking_symbol_used: bool,
+	can_afford:          bool,
 }
-calculate_object_cost :: proc(
+get_object_cost :: proc(
 	object_name: Object_Name,
 	game: Game,
-	player_id: Player_ID = nil,
+	player_id: Maybe(Player_ID) = nil,
 ) -> Object_Real_Cost {
 
-	p_id: Player_ID
-	if player_id == nil {p_id = game.turn_player}
+	p_id := player_id.? or_else game.turn_player
 	object := objects_db[object_name]
 	player := game.player_states[p_id]
 	opponent := game.player_states[Player_ID(-1 * int(p_id))]
 
 	// check for free linking symbol
 	if object.cost.free_construction_symbol in player.linking_symbols {
-		return {linking_symbol_used = true}
+		return {linking_symbol_used = true, can_afford = true}
 	}
 
 	building_coin_cost := object.cost.coins
@@ -331,13 +331,20 @@ calculate_object_cost :: proc(
 		total_extra_res_required -= 2
 	}
 	// if we can cover our production without considering trading then we are done. if not...
-	if total_extra_res_required <= 0 {return {building_coin_cost, 0, false}}
+	if total_extra_res_required <= 0 {
+		return {building_coin_cost, 0, false, building_coin_cost <= player.coins}
+	}
 
 
 	// if we have no varaible resource production, no need to sort.
 	if variable_brown_res_available + variable_grey_res_available <= 0 {
 		traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
-		return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
+		return {
+			building_coin_cost + traded_coin_cost,
+			traded_coin_cost,
+			false,
+			building_coin_cost + traded_coin_cost <= player.coins,
+		}
 	}
 	// if we do, we need to know what the best way to spend "variable" resource production is
 	resource_costs: [5]Resource_Key_Value_Pair = {
@@ -369,7 +376,25 @@ calculate_object_cost :: proc(
 		}
 	}
 	traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
-	return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
+	return {
+		building_coin_cost + traded_coin_cost,
+		traded_coin_cost,
+		false,
+		building_coin_cost + traded_coin_cost <= player.coins,
+	}
+}
+
+get_all_object_costs :: proc(
+	game: Game,
+	player: Maybe(Player_ID),
+) -> (
+	object_costs: [Object_Name]Object_Real_Cost,
+) {
+	p_id := player.? or_else game.turn_player
+	for object in Object_Name {
+		object_costs[object] = get_object_cost(object, game, p_id)
+	}
+	return
 }
 
 
@@ -431,8 +456,8 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 			if count_constructed_wonders(game) < 7 {
 				for wonder, idx in turn_player.wonders {
 					if int(turn_player.cards_tucked[idx]) != 0 {continue}
-					wonder_cost := calculate_object_cost(wonder, game)
-					if wonder_cost.total_coin_cost <= turn_player.coins {
+					wonder_cost := get_object_cost(wonder, game)
+					if wonder_cost.can_afford {
 						append(
 							&base_wonder_moves,
 							Move {
@@ -459,8 +484,8 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 						},
 					)
 					// add moves to construct cards
-					card_cost := calculate_object_cost(slot.card_in_slot, game)
-					if card_cost.total_coin_cost <= turn_player.coins {
+					card_cost := get_object_cost(slot.card_in_slot, game)
+					if card_cost.can_afford {
 						append(
 							&valid_moves,
 							Move {

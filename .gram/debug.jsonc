@@ -7,11 +7,11 @@
     "label": "Debug Odin App",
     "adapter": "CodeLLDB",
     "request": "launch",
-    "program": "$GRAM_WORKTREE_ROOT/debug_build.exe",
+    "program": "$GRAM_WORKTREE_ROOT/7_wonders_duel.exe",
     "cwd": "$GRAM_WORKTREE_ROOT",
     "build": {
       "command": "odin",
-      "args": ["build", ".", "-debug", "-o:none", "-out:debug_build.exe"],
+      "args": ["build", ".", "-debug", "-o:none", "-out:7_wonders_duel.exe"],
     },
     "initCommands": [
       "settings set target.max-children-count 256",
