@@ -7,7 +7,7 @@ Board_Slot :: struct {
 	selectable:       bool,
 	covers:           [dynamic; 4]int,
 	covered_by_count: int,
-	card_in_slot:     Object_Name,
+	card_in_slot:     Maybe(Object_Name),
 }
 
 Board :: [20]Board_Slot
@@ -58,8 +58,8 @@ default_age_boards: [Age]Board = #partial {
 		{age = .Age2, id = 19, face_up = true, covered_by_count = 1},
 	},
 	.Age3 = {
-		{age = .Age3, id = 1, face_up = true, selectable = true, covers = {3, 4}},
 		{age = .Age3, id = 0, face_up = true, selectable = true, covers = {2, 3}},
+		{age = .Age3, id = 1, face_up = true, selectable = true, covers = {3, 4}},
 		{age = .Age3, id = 2, covers = {5, 6}, covered_by_count = 1},
 		{age = .Age3, id = 3, covers = {6, 7}, covered_by_count = 2},
 		{age = .Age3, id = 4, covers = {7, 8}, covered_by_count = 1},

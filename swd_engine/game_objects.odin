@@ -28,7 +28,7 @@ Object :: struct {
 // Object_Name enum is sorted by a convenient UI display order
 Object_Name :: enum {
 	// brown wood
-	Lumber_Yard = 1,
+	Lumber_Yard,
 	Logging_Camp,
 	Sawmill,
 	// brown clay

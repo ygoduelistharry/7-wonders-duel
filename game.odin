@@ -469,7 +469,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 			CARD_STRUCTURE_MIDPOINT + {f32(grid_pos.x), f32(grid_pos.y)} * {x_offset, y_offset}
 		show_cost: bool
 		card := slot.card_in_slot
-		if card == {} {continue}
+		if card == nil {continue}
 		if slot.face_up {
 			border_colour: rl.Color
 			border_width: f32
@@ -485,7 +485,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 			append(
 				&ui_state.ui_element_list,
 				create_game_object_ui_element(
-					card,
+					card.?,
 					midpoint,
 					border_width = border_width,
 					border_colour = border_colour,
@@ -508,7 +508,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 						dest_midpoint = midpoint,
 						text = fmt.ctprintf(
 							"%d",
-							ui_state.object_costs[turn_player][card].total_coin_cost,
+							ui_state.object_costs[turn_player][card.?].total_coin_cost,
 						),
 						font = main_font,
 						font_size = 30,
@@ -517,7 +517,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 				)
 			}
 		} else {
-			back := object_texture_info_db[card].game_object_back
+			back := object_texture_info_db[card.?].game_object_back
 			back_texture := card_back_textures[back]
 			append(
 				&ui_state.ui_element_list,

@@ -6,7 +6,7 @@ import "core:slice"
 import "core:time"
 
 Science_Symbol :: enum u8 {
-	Astrolabe = 1,
+	Astrolabe,
 	Scales,
 	Sundial,
 	Mortar_And_Pestle,
@@ -16,7 +16,7 @@ Science_Symbol :: enum u8 {
 }
 
 Progress_Token :: enum u16 {
-	Agriculture = 1,
+	Agriculture,
 	Architechture,
 	Economy,
 	Law,
@@ -30,7 +30,7 @@ Progress_Token :: enum u16 {
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
 
 Linking_Symbol :: enum u32 {
-	Stable = 1,
+	Stable,
 	Garrison,
 	Palisade,
 	Archery_Range,
@@ -77,7 +77,7 @@ object_kind_dot_product :: proc(r1, r2: [Object_Colour]int) -> int {
 }
 
 Guild :: enum u8 {
-	Builders_Guild = 1,
+	Builders_Guild,
 	Moneylenders_Guild,
 	Scientists_Guild,
 	Shipowners_Guild,
@@ -88,7 +88,7 @@ Guild :: enum u8 {
 Guilds :: distinct bit_set[Guild;u8]
 
 Resource :: enum u8 {
-	Clay = 1,
+	Clay,
 	Stone,
 	Wood,
 	Glass,
@@ -362,14 +362,15 @@ get_object_cost :: proc(
 
 	//iterate over the resource costs and decrement our avaialbe varaible resources until they are gone
 	for kvp in resource_costs {
+		// if kvp.value == 0 {continue}
 		if kvp.resource in brown_resources {
-			for extra_res_required[kvp.resource] > 0 || variable_brown_res_available > 0 {
+			for extra_res_required[kvp.resource] > 0 && variable_brown_res_available > 0 {
 				extra_res_required[kvp.resource] -= 1
 				variable_brown_res_available -= 1
 			}
 		}
 		if kvp.resource in grey_resources {
-			for extra_res_required[kvp.resource] > 0 || variable_grey_res_available > 0 {
+			for extra_res_required[kvp.resource] > 0 && variable_grey_res_available > 0 {
 				extra_res_required[kvp.resource] -= 1
 				variable_grey_res_available -= 1
 			}
@@ -426,7 +427,7 @@ Move :: struct {
 
 get_selectable_cards :: proc(game: Game) -> (selectable_cards: [dynamic; 8]Object_Name) {
 	for slot in game.boards[game.age] {
-		if slot.selectable {append(&selectable_cards, slot.card_in_slot)}
+		if slot.selectable {append(&selectable_cards, slot.card_in_slot.?)}
 	}
 	return
 }
@@ -484,7 +485,7 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 						},
 					)
 					// add moves to construct cards
-					card_cost := get_object_cost(slot.card_in_slot, game)
+					card_cost := get_object_cost(slot.card_in_slot.?, game)
 					if card_cost.can_afford {
 						append(
 							&valid_moves,
@@ -732,12 +733,17 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	if object.revive_card {game.choice_state = .Choose_Card_To_Revive}
 }
 
-// Returns the card removed from the slot (will be .None if slot was empty)
-remove_card_from_board :: proc(slot: ^Board_Slot, game: ^Game) -> (card_removed: Object_Name) {
+// Returns the card removed from the slot (will be nil if slot was empty)
+remove_card_from_board :: proc(
+	slot: ^Board_Slot,
+	game: ^Game,
+) -> (
+	card_removed: Maybe(Object_Name),
+) {
 	board: ^Board = &game.boards[slot.age]
 	card_removed = slot.card_in_slot
-	if card_removed != {} {
-		slot.card_in_slot = {}
+	if card_removed != nil {
+		slot.card_in_slot = nil
 		game.objects_left_in_age -= 1
 		slot.selectable = false
 		for covered_id in slot.covers {
@@ -874,7 +880,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			}
 			slot := &board[move.slot_idx.?]
 			card_to_construct := remove_card_from_board(slot, game)
-			construct_object(card_to_construct, move.acting_player, game)
+			construct_object(card_to_construct.?, move.acting_player, game)
 		}
 	case .Construct_Wonder:
 		{
@@ -887,7 +893,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			construct_object(move.wonder_name.?, move.acting_player, game)
 			for wonder, idx in player.wonders {
 				if wonder == move.wonder_name {
-					player.cards_tucked[idx] = card_to_tuck
+					player.cards_tucked[idx] = card_to_tuck.?
 					break
 				}
 			}
@@ -897,7 +903,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			slot := &board[move.slot_idx.?]
 			card_to_discard := remove_card_from_board(slot, game)
 			player.coins += 2 + player.object_kind_count_owned[.Yellow]
-			append(&game.cards_discarded, card_to_discard)
+			append(&game.cards_discarded, card_to_discard.?)
 		}
 	case .Select_Progress_Token:
 		{
