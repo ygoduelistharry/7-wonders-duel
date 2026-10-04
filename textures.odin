@@ -154,6 +154,7 @@ military_token_5_texture: rl.Texture2D
 coin_texture: rl.Texture2D
 build_icon_texture: rl.Texture2D
 built_icon_texture: rl.Texture2D
+player_icon_textures: #sparse[swd.Player_ID]rl.Texture2D
 
 load_textures :: proc() {
 	game_object_atlases = load_object_atlases()
@@ -183,6 +184,8 @@ load_textures :: proc() {
 
 	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
 
+	player_icon_textures[.P1] = rl.LoadTexture("images/p1icon.png")
+	player_icon_textures[.P2] = rl.LoadTexture("images/p2icon.png")
 }
 
 rounded_rect_shader: rl.Shader

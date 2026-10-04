@@ -171,6 +171,7 @@ Age :: enum u8 {
 }
 
 Choice_State :: enum u16 {
+	Game_Over,
 	Choose_Wonder_To_Draft,
 	Choose_Object_To_Construct_Or_Discard,
 	Choose_Progress_Token,
@@ -217,6 +218,7 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 	new_game.turn_player = rand.choice_enum(Player_ID, rng)
 
 	new_game.age = .DraftWonders
+	new_game.choice_state = .Choose_Wonder_To_Draft
 	new_game.objects_left_in_age = 8
 
 	wonders := get_all_wonder_names()
@@ -440,6 +442,10 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	opponent := game.player_states[opponent_id]
 
 	switch game.choice_state {
+	case .Game_Over:
+		{
+			return {}
+		}
 	case .Choose_Wonder_To_Draft:
 		{
 			for idx in game.wonder_ids_draftable {
@@ -636,7 +642,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	player := &game.player_states[player_id]
 	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
 
-	if object.colour != .Wonder {
+	if game_object_is_card(object_name) {
 		append(&player.cards_constructed, object_name)
 	}
 	player.object_kind_count_owned[object.colour] += 1
@@ -696,11 +702,13 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 
 	// check for military victory
 	if game.military_track <= -9 {
+		game.choice_state = .Game_Over
 		game.completed = true
 		game.winner = .P1
 		return
 	}
 	if game.military_track >= 9 {
+		game.choice_state = .Game_Over
 		game.completed = true
 		game.winner = .P2
 		return
@@ -713,6 +721,7 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		if player.science_symbols[symbol] == 1 {
 			player.unique_science_symbols += 1
 			if player.unique_science_symbols >= 6 {
+				game.choice_state = .Game_Over
 				game.completed = true
 				game.winner = player_id
 				return
@@ -958,6 +967,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			}
 		} else {
 			game.completed = true
+			game.choice_state = .Game_Over
 			vp_p1, blue_vp_p1 := calculate_victory_points(Player_ID.P1, game^)
 			vp_p2, blue_vp_p2 := calculate_victory_points(Player_ID.P2, game^)
 			net_vp, net_blue_vp := vp_p2 - vp_p1, blue_vp_p2 - blue_vp_p1
@@ -974,8 +984,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
 		if !game.go_again_active {
 			change_turn_player(game)
-			game.go_again_active = false
 		}
+		game.go_again_active = false
 	}
 }
 

@@ -202,6 +202,11 @@ handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsKeyReleased(.TAB) {
 		ui_state.cost_overlay_on = !ui_state.cost_overlay_on
 	}
+	if rl.IsKeyReleased(.F) {
+		swd.execute_random_move_safe(ui_state.game)
+		ui_state.last_selected_object = nil
+		ui_state.valid_moves_dirty = true
+	}
 
 	ui_state.ui_element_clicked_last_frame = {}
 	if rl.IsMouseButtonReleased(.LEFT) {
@@ -225,6 +230,10 @@ handle_input :: proc(ui_state: ^UIState) {
 handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	selected_move: swd.Move
 	switch ui_state.game.choice_state {
+	case .Game_Over:
+		{
+			return
+		}
 	case .Choose_Wonder_To_Draft:
 		{
 			for move in ui_state.valid_moves {
@@ -242,7 +251,12 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 					selected_object := ui_element_clicked.game_object
 
 					if swd.game_object_is_card(selected_object) {
-						ui_state.last_selected_object = selected_object
+						for move in ui_state.valid_moves {
+							if move.card_name == selected_object {
+								ui_state.last_selected_object = selected_object
+								break
+							}
+						}
 					}
 
 					if swd.game_object_is_wonder(selected_object) {
@@ -283,18 +297,37 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 				}
 			}
 		}
-	case .Choose_Progress_Token:
-		{}
-	case .Choose_Unavailable_Progress_Token:
-		{}
-	case .Choose_Brown_Card_To_Destroy:
-		{}
-	case .Choose_Grey_Card_To_Destroy:
-		{}
-	case .Choose_Card_To_Revive:
-		{}
+	case .Choose_Progress_Token, .Choose_Unavailable_Progress_Token:
+		{
+			for move in ui_state.valid_moves {
+				if move.token == ui_element_clicked.progress_token {
+					selected_move = move
+					break
+				}
+			}
+		}
+	case .Choose_Brown_Card_To_Destroy, .Choose_Grey_Card_To_Destroy, .Choose_Card_To_Revive:
+		{
+			for move in ui_state.valid_moves {
+				if move.card_name == ui_element_clicked.game_object {
+					selected_move = move
+					break
+				}
+			}
+		}
 	case .Choose_First_Player:
-		{}
+		{
+			for move in ui_state.valid_moves {
+				if move.chosen_player == .P1 && ui_element_clicked.label == .SelectP1 {
+					selected_move = move
+					break
+				}
+				if move.chosen_player == .P2 && ui_element_clicked.label == .SelectP2 {
+					selected_move = move
+					break
+				}
+			}
+		}
 	}
 	if selected_move.move_kind != .None {
 		swd.execute_move_safe(selected_move, ui_state.game)
@@ -348,10 +381,12 @@ create_text_ui_element :: proc(
 ) {
 	element.label = .Text
 	element.dest_midpoint = dest_midpoint
+	element.hitbox_midpoint = dest_midpoint
 	element.text = text
 	element.font_size = size
 	element.text_colour = colour
 	element.font = font.? or_else main_font
+	element.hitbox_size = rl.MeasureTextEx(element.font, text, size, 0)
 	return
 }
 
@@ -745,13 +780,13 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 
 		for card in card_names {
 			switch int(card) {
-			case 1 ..< 20:
+			case 0 ..< 19:
 				{curr_col = 0}
-			case 20 ..< 41:
+			case 19 ..< 40:
 				{curr_col = 1}
-			case 41 ..< 55:
+			case 40 ..< 54:
 				{curr_col = 2}
-			case 55 ..< len(swd.Object_Name) + 1:
+			case 54 ..< len(swd.Object_Name) + 1:
 				{curr_col = 3}
 			}
 			if curr_col != last_col {
@@ -878,10 +913,10 @@ append_build_icon_elements :: proc(ui_state: ^UIState) {
 	}
 }
 
-append_turn_player_text :: proc(ui_state: ^UIState) {
+append_player_info :: proc(ui_state: ^UIState) {
 	turn_player_text: cstring
-	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 2.75
-	text_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER
+	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 1.75
+	text_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER * 0.5
 	text_midpoint: [2]f32
 	text_colour: rl.Color
 	switch ui_state.game.turn_player {
@@ -909,6 +944,40 @@ append_turn_player_text :: proc(ui_state: ^UIState) {
 			dest_midpoint = text_midpoint,
 		},
 	)
+	icon_size: f32 = 120.0
+	x_offset: f32 = icon_size / 2 + 10
+	y_offset: f32 = STARTING_WINDOW_HEIGHT - icon_size / 2 - 10
+	border_width: f32 = 0.0
+	if ui_state.game.choice_state == .Choose_First_Player {
+		border_width = 20.0
+	}
+	border_colour := rl.YELLOW
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .SelectP1,
+			dest_size = {icon_size, icon_size},
+			dest_midpoint = {x_offset, y_offset},
+			hitbox_size = {icon_size, icon_size},
+			hitbox_midpoint = {x_offset, y_offset},
+			texture = player_icon_textures[.P1],
+			border_width = border_width,
+			border_colour = border_colour,
+		},
+	)
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			label = .SelectP2,
+			dest_size = {icon_size, icon_size},
+			dest_midpoint = {STARTING_WINDOW_WIDTH - x_offset, y_offset},
+			hitbox_size = {icon_size, icon_size},
+			hitbox_midpoint = {STARTING_WINDOW_WIDTH - x_offset, y_offset},
+			texture = player_icon_textures[.P2],
+			border_width = border_width,
+			border_colour = border_colour,
+		},
+	)
 }
 
 update_ui_element_list :: proc(ui_state: ^UIState) {
@@ -920,7 +989,7 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_player_coin_elements(ui_state)
 	append_build_icon_elements(ui_state)
 	append_player_card_elements(ui_state)
-	append_turn_player_text(ui_state)
+	append_player_info(ui_state)
 }
 
 draw_frame :: proc(ui_state: ^UIState) {
