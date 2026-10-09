@@ -5,10 +5,14 @@ import "core:math"
 import linalg "core:math/linalg"
 import "core:mem"
 import "core:slice"
+import "core:strings"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
+
 STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT :: 1920, 1080
+STARTING_WINDOW_SIZE: [2]int : {STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT}
+
 get_screen_centre :: proc() -> [2]f32 {
 	return {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
 }
@@ -49,7 +53,7 @@ UIElement :: struct {
 	hitbox_size:     [2]f32,
 	rotation:        f32,
 	//texture data
-	texture:         rl.Texture2D,
+	texture:         Maybe(rl.Texture2D),
 	source_rect:     rl.Rectangle,
 	tint:            Maybe(rl.Color),
 	//shader parameters
@@ -76,6 +80,209 @@ get_hitbox :: proc(ui_element: UIElement) -> rl.Rectangle {
 	return hitbox
 }
 
+
+CARD_SIZE: [2]f32 : {120, 190}
+WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
+create_game_object_ui_element :: proc(
+	game_object: swd.Object_Name,
+	dest_midpoint: [2]f32,
+	rotation: f32 = 0,
+	tint: rl.Color = rl.WHITE,
+	border_width: f32 = 0,
+	border_colour: rl.Color = rl.WHITE,
+) -> UIElement {
+	dest_size: [2]f32
+	element := UIElement {
+		label           = .GameObject,
+		game_object     = game_object,
+		source_rect     = get_game_object_sub_texture_rect(game_object),
+		hitbox_midpoint = dest_midpoint,
+		dest_midpoint   = dest_midpoint,
+		texture         = game_object_atlases[object_texture_info_db[game_object].game_object_back],
+		corner_radius   = 50,
+		tint            = tint,
+		border_width    = border_width,
+		border_colour   = border_colour,
+	}
+	if swd.game_object_is_card(game_object) {
+		element.dest_size = CARD_SIZE
+		element.hitbox_size = CARD_SIZE
+	} else {
+		element.dest_size = WONDER_SIZE
+		element.hitbox_size = WONDER_SIZE
+	}
+	return element
+}
+
+create_text_ui_element :: proc(
+	text: string,
+	font_size: f32,
+	dest_midpoint: [2]f32,
+	colour: rl.Color,
+	font: Maybe(rl.Font) = nil,
+) -> (
+	element: UIElement,
+) {
+	element.label = .Text
+	element.dest_midpoint = dest_midpoint
+	element.hitbox_midpoint = dest_midpoint
+	element.text = fmt.ctprint(text)
+	element.font_size = font_size
+	element.text_colour = colour
+	element.font = font.? or_else main_font
+	element.hitbox_size = rl.MeasureTextEx(element.font, fmt.ctprint(text), font_size, 0)
+	return
+}
+
+create_rectangle_ui_element :: proc(
+	dest_midpoint: [2]f32,
+	size: [2]f32,
+	colour: rl.Color = rl.MAGENTA,
+	border_width: f32 = 0,
+	border_colour: rl.Color = rl.MAGENTA,
+	corner_radius: f32 = 0,
+) -> (
+	element: UIElement,
+) {
+	element.label = .Visual
+	element.dest_midpoint = dest_midpoint
+	element.dest_size = size
+	element.tint = colour
+	element.border_width = border_width
+	element.border_colour = border_colour
+	element.corner_radius = corner_radius
+	return
+}
+
+HorizontalPos :: enum {
+	LEFT,
+	CENTRE,
+	RIGHT,
+}
+
+VerticalPos :: enum {
+	TOP,
+	CENTRE,
+	BOTTOM,
+}
+
+create_text_box_fixed_width_elements :: proc(
+	text: string,
+	font: rl.Font,
+	font_size, line_spacing: f32,
+	text_colour: rl.Color,
+	box_origin_pos: [2]f32,
+	width: f32,
+	height: Maybe(f32) = nil,
+	padding: f32 = 5.0,
+	fill_colour: rl.Color = rl.MAGENTA,
+	h_text_alignment: HorizontalPos = .LEFT,
+	v_text_alignment: VerticalPos = .TOP,
+	h_box_origin: HorizontalPos = .CENTRE,
+	v_box_origin: VerticalPos = .CENTRE,
+	border_width: f32 = 0,
+	border_colour: rl.Color = rl.MAGENTA,
+	corner_radius: f32 = 0,
+	allocator := context.temp_allocator,
+) -> [dynamic]UIElement {
+	elements := make([dynamic]UIElement, allocator)
+	word_wrapped_lines, box_width_sufficient := string_to_word_wrapped_string_list(
+		text,
+		font,
+		font_size,
+		width - 2 * padding,
+		allocator = allocator,
+	)
+
+	line_count: int
+	if box_width_sufficient {
+		line_count = len(word_wrapped_lines)
+	}
+
+	box_height := padding * 2
+	full_text_height := f32(line_count) * font_size + f32(line_count - 1) * line_spacing
+	if h, height_specified := height.?; height_specified {
+		box_height = h
+	} else {
+		box_height += full_text_height
+	}
+
+	dest_midpoint := box_origin_pos
+	switch h_box_origin {
+	case .LEFT:
+		{dest_midpoint.x += width / 2}
+	case .RIGHT:
+		{dest_midpoint.x -= width / 2}
+	case .CENTRE:
+		{}
+	}
+	switch v_box_origin {
+	case .TOP:
+		{dest_midpoint.y += box_height / 2}
+	case .BOTTOM:
+		{dest_midpoint.y -= box_height / 2}
+	case .CENTRE:
+		{}
+	}
+	box_size: [2]f32 = {width, box_height}
+	append(
+		&elements,
+		create_rectangle_ui_element(
+			dest_midpoint,
+			box_size,
+			fill_colour,
+			border_width,
+			border_colour,
+			corner_radius,
+		),
+	)
+
+	if !box_width_sufficient {return elements}
+
+	top_line_midpoint_y_pos: f32
+	if height == nil {
+		top_line_midpoint_y_pos = dest_midpoint.y - box_height / 2 + padding + font_size / 2
+	} else {
+		switch v_text_alignment {
+		case .TOP:
+			{
+				top_line_midpoint_y_pos =
+					dest_midpoint.y - box_height / 2 + padding + font_size / 2
+			}
+		case .BOTTOM:
+			{
+				top_line_midpoint_y_pos =
+					dest_midpoint.y + box_height / 2 - padding - full_text_height + font_size / 2
+			}
+		case .CENTRE:
+			{
+				top_line_midpoint_y_pos = dest_midpoint.y - full_text_height / 2 + font_size / 2
+			}
+		}
+	}
+
+	for line, i in word_wrapped_lines {
+		y_pos := top_line_midpoint_y_pos + f32(i) * (font_size + line_spacing)
+		half_line_width := rl.MeasureTextEx(font, fmt.ctprint(line), font_size, 0).x / 2
+		half_box_width := width / 2
+		x_pos: f32
+		switch h_text_alignment {
+		case .LEFT:
+			{x_pos = dest_midpoint.x - half_box_width + padding + half_line_width}
+		case .RIGHT:
+			{x_pos = dest_midpoint.x + half_box_width - padding - half_line_width}
+		case .CENTRE:
+			{x_pos = dest_midpoint.x}
+		}
+		append(
+			&elements,
+			create_text_ui_element(line, font_size, {x_pos, y_pos}, text_colour, font),
+		)
+	}
+	return elements
+}
+
+
 SELECTION_COLOUR: rl.Color : rl.YELLOW
 PLAYER_COLOUR: #sparse[swd.Player_ID]rl.Color = {
 	.P1 = rl.BLUE,
@@ -96,20 +303,22 @@ draw_element :: proc(ui_element: UIElement) {
 			0,
 			ui_element.text_colour,
 		)
-	} else {
-		source_rect := ui_element.source_rect
-		if source_rect == {0, 0, 0, 0} {
-			source_rect = {0, 0, f32(ui_element.texture.width), f32(ui_element.texture.height)}
-		}
+		return
+	}
+	if texture, ok := ui_element.texture.?; ok {
 		dest_rect: rl.Rectangle = {
 			ui_element.dest_midpoint.x,
 			ui_element.dest_midpoint.y,
 			ui_element.dest_size.x,
 			ui_element.dest_size.y,
 		}
+		source_rect := ui_element.source_rect
+		if source_rect == {0, 0, 0, 0} {
+			source_rect = {0, 0, f32(texture.width), f32(texture.height)}
+		}
 		if ui_element.border_width + ui_element.corner_radius > 0 {
 			rl.BeginShaderMode(rounded_rect_shader)
-			sub_rect_uv_bounds := get_sub_rect_uv_bounds(ui_element.texture, source_rect)
+			sub_rect_uv_bounds := get_sub_rect_uv_bounds(texture, source_rect)
 			corner_radius := ui_element.corner_radius
 			border_width := ui_element.border_width
 			border_colour := linalg.array_cast(ui_element.border_colour, f32) / 255.0
@@ -139,7 +348,7 @@ draw_element :: proc(ui_element: UIElement) {
 			)
 		}
 		rl.DrawTexturePro(
-			ui_element.texture,
+			texture,
 			source_rect,
 			dest_rect,
 			ui_element.dest_size / 2,
@@ -149,13 +358,30 @@ draw_element :: proc(ui_element: UIElement) {
 		if ui_element.border_width + ui_element.corner_radius > 0 {
 			rl.EndShaderMode()
 		}
+	} else {
+		dest_rect: rl.Rectangle = {
+			ui_element.dest_midpoint.x - ui_element.dest_size.x / 2,
+			ui_element.dest_midpoint.y - ui_element.dest_size.y / 2,
+			ui_element.dest_size.x,
+			ui_element.dest_size.y,
+		}
+		roundness :=
+			2 * ui_element.corner_radius / min(ui_element.dest_size.x, ui_element.dest_size.y)
+		rl.DrawRectangleRounded(dest_rect, roundness, 10, tint)
+		rl.DrawRectangleRoundedLinesEx(
+			dest_rect,
+			roundness,
+			10,
+			ui_element.border_width,
+			ui_element.border_colour,
+		)
 	}
 }
 
 UIState :: struct {
 	game:                          ^swd.Game,
 	last_mouse_world_position:     [2]f32,
-	ui_element_clicked_last_frame: UIElement,
+	ui_element_hovered_last_frame: UIElement,
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
@@ -170,11 +396,20 @@ print_ui_element_name :: proc(ui_element: UIElement) {
 	case .ProgressToken:
 		fmt.println(ui_element.progress_token)
 	case:
-		{}
+		{fmt.println()}
 	}
 }
 
 handle_input :: proc(ui_state: ^UIState) {
+	#reverse for ui_element in ui_state.ui_element_list {
+		if rl.CheckCollisionPointRec(ui_state.last_mouse_world_position, get_hitbox(ui_element)) {
+			ui_state.ui_element_hovered_last_frame = ui_element
+			break
+		} else {
+			ui_state.ui_element_hovered_last_frame = {}
+		}
+	}
+
 	if rl.IsKeyReleased(.Q) {
 		ui_state.game.age = .DraftWonders
 		ui_state.valid_moves_dirty = true
@@ -208,20 +443,12 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.valid_moves_dirty = true
 	}
 
-	ui_state.ui_element_clicked_last_frame = {}
 	if rl.IsMouseButtonReleased(.LEFT) {
-		fmt.println(ui_state.last_mouse_world_position)
-		#reverse for ui_element in ui_state.ui_element_list {
-			if rl.CheckCollisionPointRec(
-				ui_state.last_mouse_world_position,
-				get_hitbox(ui_element),
-			) {
-				ui_state.ui_element_clicked_last_frame = ui_element
-				break
-			}
-		}
-		print_ui_element_name(ui_state.ui_element_clicked_last_frame)
-		handle_click(ui_state.ui_element_clicked_last_frame, ui_state)
+		fmt.print(ui_state.last_mouse_world_position)
+		fmt.print(" : ")
+
+		print_ui_element_name(ui_state.ui_element_hovered_last_frame)
+		handle_click(ui_state.ui_element_hovered_last_frame, ui_state)
 	}
 
 	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
@@ -336,60 +563,60 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	}
 }
 
-
-CARD_SIZE: [2]f32 : {120, 190}
-WONDER_SIZE: [2]f32 : {225 * 1.25, 135 * 1.25}
-create_game_object_ui_element :: proc(
-	game_object: swd.Object_Name,
-	dest_midpoint: [2]f32,
-	rotation: f32 = 0,
-	tint: rl.Color = rl.WHITE,
-	border_width: f32 = 0,
-	border_colour: rl.Color = rl.WHITE,
-) -> UIElement {
-	dest_size: [2]f32
-	element := UIElement {
-		label           = .GameObject,
-		game_object     = game_object,
-		source_rect     = get_game_object_sub_texture_rect(game_object),
-		hitbox_midpoint = dest_midpoint,
-		dest_midpoint   = dest_midpoint,
-		texture         = game_object_atlases[object_texture_info_db[game_object].game_object_back],
-		corner_radius   = 50,
-		tint            = tint,
-		border_width    = border_width,
-		border_colour   = border_colour,
-	}
-	if swd.game_object_is_card(game_object) {
-		element.dest_size = CARD_SIZE
-		element.hitbox_size = CARD_SIZE
-	} else {
-		element.dest_size = WONDER_SIZE
-		element.hitbox_size = WONDER_SIZE
-	}
-	return element
-}
-
-create_text_ui_element :: proc(
-	text: cstring,
-	size: f32,
-	dest_midpoint: [2]f32,
-	colour: rl.Color,
-	font: Maybe(rl.Font) = nil,
+//TODO rewrite below allocation-less
+string_to_word_wrapped_string_list :: proc(
+	text: string,
+	font: rl.Font,
+	font_size: f32,
+	max_line_width: f32,
+	allocator := context.allocator,
 ) -> (
-	element: UIElement,
+	[dynamic]string,
+	bool,
 ) {
-	element.label = .Text
-	element.dest_midpoint = dest_midpoint
-	element.hitbox_midpoint = dest_midpoint
-	element.text = text
-	element.font_size = size
-	element.text_colour = colour
-	element.font = font.? or_else main_font
-	element.hitbox_size = rl.MeasureTextEx(element.font, text, size, 0)
-	return
-}
+	words := strings.split(text, " ")
+	defer delete(words)
+	word_widths := make([dynamic]f32)
+	defer delete(word_widths)
+	space_width := rl.MeasureTextEx(font, " ", font_size, 0).x
+	max_word_width: f32
+	for word in words {
+		word_width :=
+			rl.MeasureTextEx(font, strings.clone_to_cstring(word, context.temp_allocator), font_size, 0).x
+		append(&word_widths, word_width)
+		max_word_width = max(word_width, max_word_width)
+	}
 
+	lines := make([dynamic]string, allocator)
+	if max_word_width > max_line_width {return nil, false}
+
+	curr_line_width: f32
+	curr_line := strings.builder_make()
+	defer strings.builder_destroy(&curr_line)
+	for word_width, i in word_widths {
+		word := words[i]
+		if curr_line_width == 0 {
+			strings.write_string(&curr_line, word)
+			curr_line_width += word_width
+			continue
+		}
+		if curr_line_width + word_width + space_width <= max_line_width {
+			strings.write_string(&curr_line, " ")
+			strings.write_string(&curr_line, word)
+			curr_line_width += word_width + space_width
+		} else {
+			append(&lines, strings.clone(strings.to_string(curr_line), allocator))
+			strings.builder_reset(&curr_line)
+			strings.write_string(&curr_line, word)
+			curr_line_width = word_width
+		}
+	}
+	if curr_line_width > 0 {
+		append(&lines, strings.clone(strings.to_string(curr_line), allocator))
+	}
+
+	return lines, true
+}
 
 append_wonder_draft_elements :: proc(ui_state: ^UIState) {
 	if ui_state.game.age != .DraftWonders {return}
@@ -980,7 +1207,30 @@ append_player_info :: proc(ui_state: ^UIState) {
 	)
 }
 
+append_token_tooltips :: proc(ui_state: ^UIState) {
+	if ui_state.ui_element_hovered_last_frame.label == .ProgressToken {
+		token := ui_state.ui_element_hovered_last_frame.progress_token
+		for element in create_text_box_fixed_width_elements(
+			swd.progress_token_description[token],
+			main_font,
+			20,
+			2,
+			rl.WHITE,
+			ui_state.ui_element_hovered_last_frame.dest_midpoint - {0, 60},
+			250,
+			v_box_origin = .BOTTOM,
+			fill_colour = {0, 0, 0, 128},
+			border_width = 2,
+			border_colour = rl.DARKPURPLE,
+			corner_radius = 8,
+		) {
+			append(&ui_state.ui_element_list, element)
+		}
+	}
+}
+
 update_ui_element_list :: proc(ui_state: ^UIState) {
+	prev_element_count := len(ui_state.ui_element_list)
 	clear(&ui_state.ui_element_list)
 	append_wonder_draft_elements(ui_state)
 	append_player_wonder_elements(ui_state)
@@ -990,15 +1240,28 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_build_icon_elements(ui_state)
 	append_player_card_elements(ui_state)
 	append_player_info(ui_state)
+	append_token_tooltips(ui_state)
+	if len(ui_state.ui_element_list) != prev_element_count {
+		fmt.print("--UIElement count last frame: ")
+		fmt.println(len(ui_state.ui_element_list[:]))
+	}
 }
 
 draw_frame :: proc(ui_state: ^UIState) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)
+	rl.DrawTexturePro(
+		background,
+		{0, 0, f32(background.width), f32(background.height)},
+		{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())},
+		{0, 0},
+		0.0,
+		rl.WHITE,
+	)
+
 	rl.BeginMode2D(camera)
 
 	for element in ui_state.ui_element_list {draw_element(element)}
-
 
 	rl.EndMode2D()
 	rl.EndDrawing()

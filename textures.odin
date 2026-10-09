@@ -155,6 +155,7 @@ coin_texture: rl.Texture2D
 build_icon_texture: rl.Texture2D
 built_icon_texture: rl.Texture2D
 player_icon_textures: #sparse[swd.Player_ID]rl.Texture2D
+background: rl.Texture2D
 
 load_textures :: proc() {
 	game_object_atlases = load_object_atlases()
@@ -177,15 +178,21 @@ load_textures :: proc() {
 	rl.SetTextureFilter(coin_texture, .BILINEAR)
 
 	build_icon_texture = rl.LoadTexture("images/build.png")
-	rl.SetTextureFilter(coin_texture, .BILINEAR)
+	rl.SetTextureFilter(build_icon_texture, .BILINEAR)
 
 	built_icon_texture = rl.LoadTexture("images/built.png")
-	rl.SetTextureFilter(coin_texture, .BILINEAR)
-
-	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
+	rl.SetTextureFilter(built_icon_texture, .BILINEAR)
 
 	player_icon_textures[.P1] = rl.LoadTexture("images/p1icon.png")
+	rl.SetTextureFilter(player_icon_textures[.P1], .BILINEAR)
+
 	player_icon_textures[.P2] = rl.LoadTexture("images/p2icon.png")
+	rl.SetTextureFilter(player_icon_textures[.P2], .BILINEAR)
+
+	background = rl.LoadTexture("images/background.png")
+	rl.SetTextureFilter(background, .BILINEAR)
+
+	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
 }
 
 rounded_rect_shader: rl.Shader

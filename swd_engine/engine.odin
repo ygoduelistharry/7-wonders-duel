@@ -28,6 +28,18 @@ Progress_Token :: enum u16 {
 	Urbanism,
 }
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
+progress_token_description: [Progress_Token]string = {
+	.Agriculture   = "Gain 6 coins. Worth 4 VP.",
+	.Architechture = "Future Wonders built by you cost 2 fewer resources.",
+	.Economy       = "You gain money spent by your opponent when they trade for resources",
+	.Law           = "Worth 1 scientific symbol.",
+	.Masonry       = "Blue cards built by you cost 2 fewer resources.",
+	.Mathematics   = "Worth 3 VP per Progress token at end of game (including itself).",
+	.Philosophy    = "Worth 7 VP",
+	.Strategy      = "Red cards built by you provide +1 shield.",
+	.Theology      = "Future Wonders built by you have 'Play Again'",
+	.Urbanism      = "Gain 6 coins. When constructing a building for free via linking symbol, gain 4 coins.",
+}
 
 Linking_Symbol :: enum u32 {
 	Stable,
