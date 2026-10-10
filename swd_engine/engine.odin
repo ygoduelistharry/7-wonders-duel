@@ -28,6 +28,7 @@ Progress_Token :: enum u16 {
 	Urbanism,
 }
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
+@(rodata)
 progress_token_description: [Progress_Token]string = {
 	.Agriculture   = "Gain 6 coins. Worth 4 VP.",
 	.Architechture = "Future Wonders built by you cost 2 fewer resources.",
@@ -192,6 +193,19 @@ Choice_State :: enum u16 {
 	Choose_Grey_Card_To_Destroy,
 	Choose_Card_To_Revive,
 	Choose_First_Player,
+}
+
+@(rodata)
+choice_state_text: [Choice_State]string = {
+	.Game_Over                             = "Game over.",
+	.Choose_Wonder_To_Draft                = "Choose a wonder to draft.",
+	.Choose_Object_To_Construct_Or_Discard = "Choose an object to construct or discard.",
+	.Choose_Progress_Token                 = "Choose a progress token.",
+	.Choose_Unavailable_Progress_Token     = "Choose a progress token.",
+	.Choose_Brown_Card_To_Destroy          = "Choose a Brown card to destroy.",
+	.Choose_Grey_Card_To_Destroy           = "Choose a Grey card to destroy.",
+	.Choose_Card_To_Revive                 = "Choose a card to revive.",
+	.Choose_First_Player                   = "Choose which player goes first.",
 }
 
 Game :: struct {
@@ -706,10 +720,22 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 
 	// destroy opponent coins
 	coin_loss := object.coins_destroyed
-	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {coin_loss += 2}
-	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {coin_loss += 5}
-	if game.military_track >= 3 && .P1_2 in game.military_tokens_available {coin_loss += 2}
-	if game.military_track >= 6 && .P1_5 in game.military_tokens_available {coin_loss += 5}
+	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {
+		coin_loss += 2
+		game.military_tokens_available -= {.P1_2}
+	}
+	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {
+		coin_loss += 5
+		game.military_tokens_available -= {.P1_5}
+	}
+	if game.military_track >= 3 && .P2_2 in game.military_tokens_available {
+		coin_loss += 2
+		game.military_tokens_available -= {.P2_2}
+	}
+	if game.military_track >= 6 && .P2_5 in game.military_tokens_available {
+		coin_loss += 5
+		game.military_tokens_available -= {.P2_5}
+	}
 	opponent.coins = max(0, opponent.coins - coin_loss)
 
 	// check for military victory
@@ -955,6 +981,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		{
 			if move.choice_state == .Choose_First_Player {
 				game.turn_player = move.chosen_player.?
+				game.go_again_active = true
 			}
 		}
 	}

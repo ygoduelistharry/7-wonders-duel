@@ -242,7 +242,6 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 	}
 }
 
-
 draw_frame :: proc(ui_state: ^UIState) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BACKGROUND_COLOUR)

@@ -36,11 +36,12 @@ draw_element :: proc(ui_element: Data) {
 		if source_rect == {0, 0, 0, 0} {
 			source_rect = {0, 0, f32(texture.width), f32(texture.height)}
 		}
+		scale := min(dest_rect.width / source_rect.width, dest_rect.height / source_rect.height)
 		if ui_element.border_width + ui_element.corner_radius > 0 {
 			rl.BeginShaderMode(rounded_rect_shader)
 			sub_rect_uv_bounds := get_sub_rect_uv_bounds(texture, source_rect)
-			corner_radius := ui_element.corner_radius
-			border_width := ui_element.border_width
+			corner_radius := ui_element.corner_radius / scale
+			border_width := ui_element.border_width / scale
 			border_colour := linalg.array_cast(ui_element.border_colour, f32) / 255.0
 			rl.SetShaderValue(
 				rounded_rect_shader,

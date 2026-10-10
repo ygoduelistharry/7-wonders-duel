@@ -42,8 +42,8 @@ create_game_object_ui_element :: proc(
 		source_rect     = get_game_object_sub_texture_rect(game_object),
 		hitbox_midpoint = dest_midpoint,
 		dest_midpoint   = dest_midpoint,
-		texture         = game_object_atlases[object_texture_info_db[game_object].game_object_back],
-		corner_radius   = 50,
+		texture         = game_object_atlases[OBJECT_TEXTURE_INFO_DB[game_object].game_object_back],
+		corner_radius   = CARD_CORNER_RADIUS,
 		tint            = tint,
 		border_width    = border_width,
 		border_colour   = border_colour,
@@ -139,8 +139,9 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 		if slot.face_up {
 			border_colour: rl.Color
 			border_width: f32
-			if slot.selectable {
-				border_width = 4.0
+			if slot.selectable &&
+			   ui_state.game.choice_state == .Choose_Object_To_Construct_Or_Discard {
+				border_width = SELECTION_BORDER_WIDTH
 				if ui_state.cost_overlay_on {show_cost = true}
 			}
 			if ui_state.last_selected_object == card {
@@ -187,7 +188,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 				)
 			}
 		} else {
-			back := object_texture_info_db[card.?].game_object_back
+			back := OBJECT_TEXTURE_INFO_DB[card.?].game_object_back
 			back_texture := card_back_textures[back]
 			append(
 				&ui_state.ui_element_list,
@@ -199,7 +200,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 						dest_size = CARD_SIZE,
 						hitbox_midpoint = midpoint,
 						hitbox_size = CARD_SIZE,
-						corner_radius = 50,
+						corner_radius = CARD_CORNER_RADIUS,
 					},
 				},
 			)
@@ -287,6 +288,11 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 		if token_taken {continue}
 		token_to_draw := ui_state.game.progress_tokens_available[i]
 		token_midpoint = MILITARY_TRACK_MIDPOINT + token_offset + {f32(i) * token_spacing, 0}
+		border_width: f32
+		border_colour := PLAYER_COLOUR[ui_state.game.turn_player]
+		if ui_state.game.choice_state == .Choose_Progress_Token {
+			border_width = SELECTION_BORDER_WIDTH
+		}
 		append(
 			&ui_state.ui_element_list,
 			UIElement {
@@ -300,6 +306,9 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 					hitbox_midpoint = token_midpoint,
 					hitbox_size = token_size,
 					rotation = 180,
+					border_width = border_width,
+					border_colour = border_colour,
+					corner_radius = PROGRESS_TOKEN_DIAMETER / 2,
 				},
 			},
 		)
@@ -336,7 +345,7 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 				}
 			case (card_selected && turn_player_owns_wonder && can_afford):
 				{
-					border_width = 4.0
+					border_width = SELECTION_BORDER_WIDTH
 				}
 			}
 
@@ -439,7 +448,29 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 			} else {row += 1}
 			x := x_base + f32(curr_col) * CARD_SIZE.x
 			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
-			append(&ui_state.ui_element_list, create_game_object_ui_element(card, {x, y}))
+			border_width: f32
+			border_colour: rl.Color
+			if ui_state.game.choice_state == .Choose_Brown_Card_To_Destroy &&
+			   ui_state.game.turn_player != player &&
+			   swd.objects_db[card].colour == .Brown {
+				border_width = SELECTION_BORDER_WIDTH
+				border_colour = PLAYER_COLOUR[player]
+			}
+			if ui_state.game.choice_state == .Choose_Grey_Card_To_Destroy &&
+			   ui_state.game.turn_player != player &&
+			   swd.objects_db[card].colour == .Grey {
+				border_width = SELECTION_BORDER_WIDTH
+				border_colour = PLAYER_COLOUR[player]
+			}
+			append(
+				&ui_state.ui_element_list,
+				create_game_object_ui_element(
+					card,
+					{x, y},
+					border_width = border_width,
+					border_colour = border_colour,
+				),
+			)
 		}
 	}
 }
@@ -462,9 +493,9 @@ append_player_coin_elements :: proc(ui_state: ^UIState) {
 		}
 		game_function: GameFunction
 		border_width: f32
-		if ui_state.game.turn_player == player {
+		if ui_state.game.turn_player == player && ui_state.last_selected_object != nil {
 			game_function = .DiscardForCoinConfirm
-			border_width = 4.0
+			border_width = SELECTION_BORDER_WIDTH
 		}
 		append(
 			&ui_state.ui_element_list,
@@ -479,7 +510,7 @@ append_player_coin_elements :: proc(ui_state: ^UIState) {
 					hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
 					border_width = border_width,
 					border_colour = PLAYER_COLOUR[player],
-					corner_radius = f32(coin_texture.height / 2),
+					corner_radius = f32(COIN_DIAMETER / 2),
 				},
 			},
 		)
@@ -522,7 +553,7 @@ append_build_icon_elements :: proc(ui_state: ^UIState) {
 			display_cost = true
 			if build_cost.can_afford {
 				tint = rl.WHITE
-				border_width = 4.0
+				border_width = SELECTION_BORDER_WIDTH
 				text_colour = rl.WHITE
 			}
 		}
@@ -540,7 +571,7 @@ append_build_icon_elements :: proc(ui_state: ^UIState) {
 					tint = tint,
 					border_width = border_width,
 					border_colour = PLAYER_COLOUR[turn_player],
-					corner_radius = f32(build_icon_texture.height / 2),
+					corner_radius = f32(COIN_DIAMETER / 2),
 				},
 			},
 		)
@@ -566,19 +597,17 @@ append_player_info :: proc(ui_state: ^UIState) {
 	turn_player_text: cstring
 	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 1.75
 	text_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER * 0.5
-	text_midpoint: [2]f32
+	text_midpoint: [2]f32 = {STARTING_WINDOW_WIDTH / 2, 2 * STARTING_WINDOW_HEIGHT / 3}
 	text_colour: rl.Color
 	switch ui_state.game.turn_player {
 	case .P1:
 		{
 			turn_player_text = "P1's Turn!"
-			text_midpoint = {STARTING_WINDOW_WIDTH / 2 - text_x_offset, text_y}
 			text_colour = rl.BLUE
 		}
 	case .P2:
 		{
 			turn_player_text = "P2's Turn!"
-			text_midpoint = {STARTING_WINDOW_WIDTH / 2 + text_x_offset, text_y}
 			text_colour = rl.RED
 		}
 	}
@@ -595,12 +624,25 @@ append_player_info :: proc(ui_state: ^UIState) {
 			},
 		},
 	)
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			ui_data = ui.Data {
+				label = .Text,
+				text = fmt.ctprint(swd.choice_state_text[ui_state.game.choice_state]),
+				font = main_font,
+				font_size = 25,
+				text_colour = rl.BLACK,
+				dest_midpoint = text_midpoint + {0, 50},
+			},
+		},
+	)
 	icon_size: f32 = 120.0
 	x_offset: f32 = icon_size / 2 + 10
 	y_offset: f32 = STARTING_WINDOW_HEIGHT - icon_size / 2 - 10
 	border_width: f32 = 0.0
 	if ui_state.game.choice_state == .Choose_First_Player {
-		border_width = 20.0
+		border_width = 6.0
 	}
 	border_colour := rl.YELLOW
 	append(
@@ -649,7 +691,7 @@ append_token_tooltips :: proc(ui_state: ^UIState) {
 			ui_state.ui_element_hovered_last_frame.ui_data.dest_midpoint - {0, 60},
 			250,
 			v_box_origin = .BOTTOM,
-			fill_colour = {0, 0, 0, 128},
+			fill_colour = {0, 0, 0, 232},
 			border_width = 2,
 			border_colour = rl.DARKPURPLE,
 			corner_radius = 8,

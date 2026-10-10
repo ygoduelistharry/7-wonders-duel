@@ -27,7 +27,8 @@ Object_Texture_Info :: struct {
 	game_object_back: Game_Object_Kind,
 	atlas_position:   [2]int,
 }
-object_texture_info_db: [swd.Object_Name]Object_Texture_Info = {
+@(rodata)
+OBJECT_TEXTURE_INFO_DB: [swd.Object_Name]Object_Texture_Info = {
 	.The_Colossus          = {.Wonders, {0, 0}},
 	.Circus_Maximus        = {.Wonders, {0, 1}},
 	.The_Hanging_Gardens   = {.Wonders, {0, 2}},
@@ -191,12 +192,10 @@ load_textures :: proc() {
 
 	background = rl.LoadTexture("images/background.png")
 	rl.SetTextureFilter(background, .BILINEAR)
-
 }
 
-
 get_game_object_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
-	key := object_texture_info_db[name]
+	key := OBJECT_TEXTURE_INFO_DB[name]
 	width, height: f32
 	switch key.game_object_back {
 	case .Wonders:
