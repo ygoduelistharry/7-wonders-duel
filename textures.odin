@@ -1,4 +1,4 @@
-package seven_wonders_duel
+package swd_ui
 
 import swd "swd_engine"
 import rl "vendor:raylib"
@@ -192,33 +192,8 @@ load_textures :: proc() {
 	background = rl.LoadTexture("images/background.png")
 	rl.SetTextureFilter(background, .BILINEAR)
 
-	main_font = rl.LoadFontEx("fonts/FiraCode-Medium.ttf", 240, nil, 0)
 }
 
-rounded_rect_shader: rl.Shader
-rounded_rect_shader_sprite_uv_bounds_loc: i32
-rounded_rect_shader_radius_loc: i32
-rounded_rect_shader_border_width_loc: i32
-rounded_rect_shader_border_color_loc: i32
-load_shaders :: proc() {
-	rounded_rect_shader = rl.LoadShader("", "shaders/rounded_rectangle.frag")
-	rounded_rect_shader_sprite_uv_bounds_loc = rl.GetShaderLocation(
-		rounded_rect_shader,
-		"spriteUVBounds",
-	)
-	rounded_rect_shader_radius_loc = rl.GetShaderLocation(rounded_rect_shader, "radius")
-	rounded_rect_shader_border_width_loc = rl.GetShaderLocation(rounded_rect_shader, "borderWidth")
-	rounded_rect_shader_border_color_loc = rl.GetShaderLocation(rounded_rect_shader, "borderColor")
-}
-
-get_sub_rect_uv_bounds :: proc(texture: rl.Texture, source_rect: rl.Rectangle) -> [4]f32 {
-	return {
-		source_rect.x / f32(texture.width),
-		source_rect.y / f32(texture.height),
-		(source_rect.x + source_rect.width) / f32(texture.width),
-		(source_rect.y + source_rect.height) / f32(texture.height),
-	}
-}
 
 get_game_object_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle {
 	key := object_texture_info_db[name]
@@ -238,66 +213,5 @@ get_game_object_sub_texture_rect :: proc(name: swd.Object_Name) -> rl.Rectangle 
 	row, col := key.atlas_position[0], key.atlas_position[1]
 	pos: [2]f32 = {f32(col) * width, f32(row) * height}
 	return {pos.x, pos.y, width, height}
-}
-
-
-draw_card_texture :: proc(
-	name: swd.Object_Name,
-	mid_pos: [2]f32,
-	size: [2]f32,
-	rotation: f32 = 0,
-	tint: rl.Color = rl.WHITE,
-) {
-	atlas := game_object_atlases[object_texture_info_db[name].game_object_back]
-	source_rect := get_game_object_sub_texture_rect(name)
-	normalised_source_rect_bounds: [4]f32 = {
-		source_rect.x / f32(atlas.width),
-		source_rect.y / f32(atlas.height),
-		(source_rect.x + source_rect.width) / f32(atlas.width),
-		(source_rect.y + source_rect.height) / f32(atlas.height),
-	}
-	// rl.SetShaderValue(
-	// 	rounded_rect_shader,
-	// 	rounded_rect_sprite_uv_bounds_loc,
-	// 	&normalised_source_rect_bounds,
-	// 	.VEC4,
-	// )
-	rl.BeginShaderMode(rounded_rect_shader)
-	rl.DrawTexturePro(
-		atlas,
-		source_rect,
-		{mid_pos.x, mid_pos.y, size.x, size.y},
-		{size.x, size.y} / 2,
-		rotation,
-		tint,
-	)
-	rl.EndShaderMode()
-}
-
-draw_card_back :: proc(
-	card_back: Game_Object_Kind,
-	mid_pos: [2]f32,
-	size: [2]f32,
-	rotation: f32 = 0,
-	tint: rl.Color = rl.WHITE,
-) {
-	texture := card_back_textures[card_back]
-	normalised_source_rect_bounds: [4]f32 = {0, 0, 1, 1}
-	// rl.SetShaderValue(
-	// 	rounded_rect_shader,
-	// 	rounded_rect_sprite_uv_bounds_loc,
-	// 	&normalised_source_rect_bounds,
-	// 	.VEC4,
-	// )
-	rl.BeginShaderMode(rounded_rect_shader)
-	rl.DrawTexturePro(
-		texture,
-		{0, 0, f32(texture.width), f32(texture.height)},
-		{mid_pos.x, mid_pos.y, size.x, size.y},
-		{size.x, size.y} / 2,
-		rotation,
-		tint,
-	)
-	rl.EndShaderMode()
 }
 
