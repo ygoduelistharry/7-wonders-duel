@@ -225,8 +225,7 @@ Game :: struct {
 	go_again_active:             bool,
 	military_track:              int, //negative means p1 leading
 	military_tokens_available:   Military_Tokens,
-	progress_tokens_available:   [dynamic; 5]Progress_Token,
-	progress_token_taken:        [5]bool,
+	progress_tokens_available:   [dynamic; 5]Maybe(Progress_Token),
 	progress_tokens_unavailable: [dynamic; 10]Progress_Token,
 	end_of_age_triggered:        bool,
 	completed:                   bool,
@@ -542,11 +541,12 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	case .Choose_Progress_Token:
 		{
 			for token, idx in game.progress_tokens_available {
-				if game.progress_token_taken[idx] {continue}
-				append(
-					&valid_moves,
-					Move{move_kind = .Select_Progress_Token, token = token, token_idx = idx},
-				)
+				if token != nil {
+					append(
+						&valid_moves,
+						Move{move_kind = .Select_Progress_Token, token = token, token_idx = idx},
+					)
+				}
 
 			}
 		}
@@ -956,7 +956,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		{
 			gain_progress_token(move.token.?, move.acting_player, game)
 			if move.choice_state == .Choose_Progress_Token {
-				game.progress_token_taken[move.token_idx.?] = true
+				game.progress_tokens_available[move.token_idx.?] = nil
 			}
 			if move.choice_state == .Choose_Unavailable_Progress_Token {
 				unordered_remove(&game.progress_tokens_unavailable, move.token_idx.?)

@@ -30,6 +30,7 @@ print_ui_element_name :: proc(ui_element: UIElement) {
 create_game_object_ui_element :: proc(
 	game_object: swd.Object_Name,
 	dest_midpoint: [2]f32,
+	size: Maybe([2]f32) = nil,
 	rotation: f32 = 0,
 	tint: rl.Color = rl.WHITE,
 	border_width: f32 = 0,
@@ -48,17 +49,92 @@ create_game_object_ui_element :: proc(
 		border_width    = border_width,
 		border_colour   = border_colour,
 	}
-	if swd.game_object_is_card(game_object) {
-		element.ui_data.dest_size = CARD_SIZE
-		element.ui_data.hitbox_size = CARD_SIZE
+	if size == nil {
+		if swd.game_object_is_card(game_object) {
+			element.ui_data.dest_size = CARD_SIZE
+		} else {
+			element.ui_data.dest_size = WONDER_SIZE
+		}
 	} else {
-		element.ui_data.dest_size = WONDER_SIZE
-		element.ui_data.hitbox_size = WONDER_SIZE
+		element.ui_data.dest_size = size.?
 	}
 	element.game_function = .GameObject
+	element.ui_data.hitbox_size = element.ui_data.dest_size
 	element.game_object = game_object
 	return
 }
+
+create_card_stack_elements :: proc(
+	cards: []swd.Object_Name,
+	top_left_card_midpoint: [2]f32,
+	allocator := context.temp_allocator,
+) -> [dynamic]UIElement {
+	elements := make([dynamic]UIElement, 32, allocator)
+	sorted_cards := slice.clone(cards, context.temp_allocator)
+	for player in swd.Player_ID {
+		slice.sort_by(sorted_cards, proc(i, j: swd.Object_Name) -> bool {
+			return int(i) < int(j)
+		})
+
+		last_col := -1
+		curr_col := 0
+		row := 0
+
+		for card in sorted_cards {
+			switch int(card) {
+			case 0 ..< 19:
+				{curr_col = 0}
+			case 19 ..< 40:
+				{curr_col = 1}
+			case 40 ..< 54:
+				{curr_col = 2}
+			case 54 ..< len(swd.Object_Name) + 1:
+				{curr_col = 3}
+			}
+			if curr_col != last_col {
+				row = 0
+				last_col = curr_col
+			} else {row += 1}
+			x := top_left_card_midpoint.x + f32(curr_col) * CARD_SIZE.x
+			y := top_left_card_midpoint.y + f32(row) * CARD_SIZE.y / 4
+			append(&elements, create_game_object_ui_element(card, {x, y}))
+		}
+	}
+	return elements
+}
+
+create_progress_token_ui_element :: proc(
+	token: swd.Progress_Token,
+	dest_midpoint: [2]f32,
+	diameter: Maybe(f32) = nil,
+	rotation: f32 = 180,
+	tint: rl.Color = rl.WHITE,
+	border_width: f32 = 0,
+	border_colour: rl.Color = rl.WHITE,
+) -> (
+	element: UIElement,
+) {
+	element.ui_data = ui.Data {
+		label           = .Visual,
+		texture         = progress_token_textures[token],
+		dest_midpoint   = dest_midpoint,
+		hitbox_midpoint = dest_midpoint,
+		rotation        = rotation,
+		border_width    = border_width,
+		border_colour   = border_colour,
+	}
+	if diameter == nil {
+		element.ui_data.dest_size = PROGRESS_TOKEN_DIAMETER
+	} else {
+		element.ui_data.dest_size = diameter.?
+	}
+	element.ui_data.hitbox_size = element.ui_data.dest_size
+	element.ui_data.corner_radius = element.ui_data.dest_size.x / 2
+	element.game_function = .ProgressToken
+	element.progress_token = token
+	return
+}
+
 
 MAX_UI_ELEMENTS :: 256
 UIState :: struct {
@@ -85,9 +161,10 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_build_icon_elements(ui_state)
 	append_player_card_elements(ui_state)
 	append_player_info(ui_state)
+	append_player_progress_tokens(ui_state)
 	append_token_tooltips(ui_state)
 	if len(ui_state.ui_element_list) != prev_element_count {
-		fmt.print("--UIElement count last frame: ")
+		fmt.print("UIElement count last frame: ")
 		fmt.println(len(ui_state.ui_element_list[:]))
 	}
 }
@@ -224,32 +301,32 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 	)
 	//military tokens on the track
 	token_texture: rl.Texture2D
-	token_midpoint: [2]f32
+	midpoint: [2]f32
 	token_rotation: f32
 	for token in ui_state.game.military_tokens_available {
 		switch token {
 		case .P1_2:
 			{
 				token_texture = military_token_2_texture
-				token_midpoint = MILITARY_TRACK_MIDPOINT + {-145, 73} * MILITARY_TRACK_SCALE
+				midpoint = MILITARY_TRACK_MIDPOINT + {-145, 73} * MILITARY_TRACK_SCALE
 				token_rotation = -90
 			}
 		case .P1_5:
 			{
 				token_texture = military_token_5_texture
-				token_midpoint = MILITARY_TRACK_MIDPOINT + {-260, 73} * MILITARY_TRACK_SCALE
+				midpoint = MILITARY_TRACK_MIDPOINT + {-260, 73} * MILITARY_TRACK_SCALE
 				token_rotation = -90
 			}
 		case .P2_2:
 			{
 				token_texture = military_token_2_texture
-				token_midpoint = MILITARY_TRACK_MIDPOINT + {145, 73} * MILITARY_TRACK_SCALE
+				midpoint = MILITARY_TRACK_MIDPOINT + {145, 73} * MILITARY_TRACK_SCALE
 				token_rotation = 90
 			}
 		case .P2_5:
 			{
 				token_texture = military_token_5_texture
-				token_midpoint = MILITARY_TRACK_MIDPOINT + {260, 73} * MILITARY_TRACK_SCALE
+				midpoint = MILITARY_TRACK_MIDPOINT + {260, 73} * MILITARY_TRACK_SCALE
 				token_rotation = 90
 			}
 		}
@@ -259,7 +336,7 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 				ui_data = ui.Data {
 					label = .Visual,
 					texture = token_texture,
-					dest_midpoint = token_midpoint,
+					dest_midpoint = midpoint,
 					dest_size = MILITARY_TOKEN_SIZE,
 					rotation = token_rotation,
 				},
@@ -281,13 +358,11 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 	)
 	//available progress tokens
 	token_spacing: f32 = PROGRESS_TOKEN_DIAMETER + 4 * MILITARY_TRACK_SCALE
-	token_size: [2]f32 = {PROGRESS_TOKEN_DIAMETER, PROGRESS_TOKEN_DIAMETER}
 	token_offset: [2]f32 = {-2 * token_spacing, -67 * MILITARY_TRACK_SCALE}
 
-	for token_taken, i in ui_state.game.progress_token_taken {
-		if token_taken {continue}
-		token_to_draw := ui_state.game.progress_tokens_available[i]
-		token_midpoint = MILITARY_TRACK_MIDPOINT + token_offset + {f32(i) * token_spacing, 0}
+	for token, i in ui_state.game.progress_tokens_available {
+		if token == nil {continue}
+		midpoint = MILITARY_TRACK_MIDPOINT + token_offset + {f32(i) * token_spacing, 0}
 		border_width: f32
 		border_colour := PLAYER_COLOUR[ui_state.game.turn_player]
 		if ui_state.game.choice_state == .Choose_Progress_Token {
@@ -295,22 +370,12 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 		}
 		append(
 			&ui_state.ui_element_list,
-			UIElement {
-				progress_token = token_to_draw,
-				game_function = .ProgressToken,
-				ui_data = ui.Data {
-					label = .Visual,
-					texture = progress_token_textures[token_to_draw],
-					dest_midpoint = token_midpoint,
-					dest_size = token_size,
-					hitbox_midpoint = token_midpoint,
-					hitbox_size = token_size,
-					rotation = 180,
-					border_width = border_width,
-					border_colour = border_colour,
-					corner_radius = PROGRESS_TOKEN_DIAMETER / 2,
-				},
-			},
+			create_progress_token_ui_element(
+				token.?,
+				midpoint,
+				border_width = border_width,
+				border_colour = border_colour,
+			),
 		)
 	}
 }
@@ -406,15 +471,8 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 	}
 }
 
-
 append_player_card_elements :: proc(ui_state: ^UIState) {
-	card_names: [dynamic; 30]swd.Object_Name
 	for player in swd.Player_ID {
-		card_names = ui_state.game.player_states[player].cards_constructed
-		slice.sort_by(card_names[:], proc(i, j: swd.Object_Name) -> bool {
-			return int(i) < int(j)
-		})
-
 		x_base: f32
 		switch player {
 		case .P1:
@@ -427,50 +485,28 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 			}
 		}
 
-		last_col := -1
-		curr_col := 0
-		row := 0
+		card_elements := create_card_stack_elements(
+			ui_state.game.player_states[player].cards_constructed[:],
+			{x_base, WONDER_SIZE.y * 2 + 115},
+		)
 
-		for card in card_names {
-			switch int(card) {
-			case 0 ..< 19:
-				{curr_col = 0}
-			case 19 ..< 40:
-				{curr_col = 1}
-			case 40 ..< 54:
-				{curr_col = 2}
-			case 54 ..< len(swd.Object_Name) + 1:
-				{curr_col = 3}
-			}
-			if curr_col != last_col {
-				row = 0
-				last_col = curr_col
-			} else {row += 1}
-			x := x_base + f32(curr_col) * CARD_SIZE.x
-			y := WONDER_SIZE.y * 2 + 25 + f32(row + 2) * CARD_SIZE.y / 4
+
+		for &card in card_elements {
 			border_width: f32
 			border_colour: rl.Color
 			if ui_state.game.choice_state == .Choose_Brown_Card_To_Destroy &&
 			   ui_state.game.turn_player != player &&
-			   swd.objects_db[card].colour == .Brown {
-				border_width = SELECTION_BORDER_WIDTH
-				border_colour = PLAYER_COLOUR[player]
+			   swd.objects_db[card.game_object].colour == .Brown {
+				card.ui_data.border_width = SELECTION_BORDER_WIDTH
+				card.ui_data.border_colour = PLAYER_COLOUR[player]
 			}
 			if ui_state.game.choice_state == .Choose_Grey_Card_To_Destroy &&
 			   ui_state.game.turn_player != player &&
-			   swd.objects_db[card].colour == .Grey {
-				border_width = SELECTION_BORDER_WIDTH
-				border_colour = PLAYER_COLOUR[player]
+			   swd.objects_db[card.game_object].colour == .Grey {
+				card.ui_data.border_width = SELECTION_BORDER_WIDTH
+				card.ui_data.border_colour = PLAYER_COLOUR[player]
 			}
-			append(
-				&ui_state.ui_element_list,
-				create_game_object_ui_element(
-					card,
-					{x, y},
-					border_width = border_width,
-					border_colour = border_colour,
-				),
-			)
+			append(&ui_state.ui_element_list, card)
 		}
 	}
 }
@@ -637,9 +673,7 @@ append_player_info :: proc(ui_state: ^UIState) {
 			},
 		},
 	)
-	icon_size: f32 = 120.0
-	x_offset: f32 = icon_size / 2 + 10
-	y_offset: f32 = STARTING_WINDOW_HEIGHT - icon_size / 2 - 10
+
 	border_width: f32 = 0.0
 	if ui_state.game.choice_state == .Choose_First_Player {
 		border_width = 6.0
@@ -651,10 +685,10 @@ append_player_info :: proc(ui_state: ^UIState) {
 			game_function = .SelectP1,
 			ui_data = ui.Data {
 				label = .Visual,
-				dest_size = {icon_size, icon_size},
-				dest_midpoint = {x_offset, y_offset},
-				hitbox_size = {icon_size, icon_size},
-				hitbox_midpoint = {x_offset, y_offset},
+				dest_size = PLAYER_ICON_SIZE,
+				dest_midpoint = P1_ICON_POS,
+				hitbox_size = PLAYER_ICON_SIZE,
+				hitbox_midpoint = P1_ICON_POS,
 				texture = player_icon_textures[.P1],
 				border_width = border_width,
 				border_colour = border_colour,
@@ -667,10 +701,10 @@ append_player_info :: proc(ui_state: ^UIState) {
 			game_function = .SelectP2,
 			ui_data = ui.Data {
 				label = .Visual,
-				dest_size = {icon_size, icon_size},
-				dest_midpoint = {STARTING_WINDOW_WIDTH - x_offset, y_offset},
-				hitbox_size = {icon_size, icon_size},
-				hitbox_midpoint = {STARTING_WINDOW_WIDTH - x_offset, y_offset},
+				dest_size = PLAYER_ICON_SIZE,
+				dest_midpoint = P2_ICON_POS,
+				hitbox_size = PLAYER_ICON_SIZE,
+				hitbox_midpoint = P2_ICON_POS,
 				texture = player_icon_textures[.P2],
 				border_width = border_width,
 				border_colour = border_colour,
@@ -678,6 +712,29 @@ append_player_info :: proc(ui_state: ^UIState) {
 		},
 	)
 }
+
+append_player_progress_tokens :: proc(ui_state: ^UIState) {
+	for player in swd.Player_ID {
+		pos: int
+		for token in swd.Progress_Token {
+			if token in ui_state.game.player_states[player].progress_tokens {
+				mid_point: [2]f32 = {P1_PROGRESS_TOKEN_X_POS, PROGRESS_TOKEN_Y_POS}
+				switch player {
+				case .P1:
+					{mid_point.x += f32(pos) * (PROGRESS_TOKEN_DIAMETER * 0.75)}
+				case .P2:
+					{mid_point.x -= f32(pos) * (PROGRESS_TOKEN_DIAMETER * 0.75)}
+				}
+				append(
+					&ui_state.ui_element_list,
+					create_progress_token_ui_element(token, mid_point),
+				)
+				pos += 1
+			}
+		}
+	}
+}
+
 
 append_token_tooltips :: proc(ui_state: ^UIState) {
 	if ui_state.ui_element_hovered_last_frame.game_function == .ProgressToken {
@@ -691,7 +748,7 @@ append_token_tooltips :: proc(ui_state: ^UIState) {
 			ui_state.ui_element_hovered_last_frame.ui_data.dest_midpoint - {0, 60},
 			250,
 			v_box_origin = .BOTTOM,
-			fill_colour = {0, 0, 0, 232},
+			fill_colour = {0, 0, 0, 216},
 			border_width = 2,
 			border_colour = rl.DARKPURPLE,
 			corner_radius = 8,
