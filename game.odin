@@ -89,19 +89,19 @@ handle_input :: proc(ui_state: ^UIState) {
 		}
 	}
 
-	if rl.IsKeyReleased(.Q) {
+	if rl.IsKeyReleased(.FOUR) {
 		ui_state.game.age = .DraftWonders
 		ui_state.valid_moves_dirty = true
 	}
-	if rl.IsKeyReleased(.W) {
+	if rl.IsKeyReleased(.ONE) {
 		ui_state.game.age = .Age1
 		ui_state.valid_moves_dirty = true
 	}
-	if rl.IsKeyReleased(.E) {
+	if rl.IsKeyReleased(.TWO) {
 		ui_state.game.age = .Age2
 		ui_state.valid_moves_dirty = true
 	}
-	if rl.IsKeyReleased(.R) {
+	if rl.IsKeyReleased(.THREE) {
 		ui_state.game.age = .Age3
 		ui_state.valid_moves_dirty = true
 	}
@@ -113,10 +113,13 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.game.military_track += 1
 		ui_state.valid_moves_dirty = true
 	}
-	if rl.IsKeyReleased(.TAB) {
+	if rl.IsKeyReleased(.C) {
 		ui_state.cost_overlay_on = !ui_state.cost_overlay_on
 	}
 	if rl.IsKeyReleased(.F) {
+		ui_state.choice_window_hidden = !ui_state.choice_window_hidden
+	}
+	if rl.IsKeyReleased(.R) {
 		swd.execute_random_move_safe(ui_state.game)
 		ui_state.last_selected_object = nil
 		ui_state.valid_moves_dirty = true

@@ -89,13 +89,15 @@ draw_element :: proc(ui_element: Data) {
 		roundness :=
 			2 * ui_element.corner_radius / min(ui_element.dest_size.x, ui_element.dest_size.y)
 		rl.DrawRectangleRounded(dest_rect, roundness, 10, tint)
-		rl.DrawRectangleRoundedLinesEx(
-			dest_rect,
-			roundness,
-			10,
-			ui_element.border_width,
-			ui_element.border_colour,
-		)
+		if ui_element.border_width > 0 {
+			rl.DrawRectangleRoundedLinesEx(
+				dest_rect,
+				roundness,
+				10,
+				ui_element.border_width,
+				ui_element.border_colour,
+			)
+		}
 	}
 }
 

@@ -553,11 +553,11 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 	case .Choose_Unavailable_Progress_Token:
 		{
 			for token, idx in game.progress_tokens_unavailable {
+				if idx >= 3 {break}
 				append(
 					&valid_moves,
 					Move{move_kind = .Select_Progress_Token, token = token, token_idx = idx},
 				)
-				if idx >= 3 {break}
 			}
 		}
 	case .Choose_Brown_Card_To_Destroy:

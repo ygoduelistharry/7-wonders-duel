@@ -147,6 +147,7 @@ UIState :: struct {
 	last_selected_object:          Maybe(swd.Object_Name),
 	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
 	cost_overlay_on:               bool,
+	choice_window_hidden:          bool,
 }
 
 
@@ -160,8 +161,9 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_player_coin_elements(ui_state)
 	append_build_icon_elements(ui_state)
 	append_player_card_elements(ui_state)
-	append_player_info(ui_state)
-	append_player_progress_tokens(ui_state)
+	append_player_info_elements(ui_state)
+	append_player_progress_tokens_elements(ui_state)
+	append_choice_window_elements(ui_state)
 	append_token_tooltips(ui_state)
 	if len(ui_state.ui_element_list) != prev_element_count {
 		fmt.print("UIElement count last frame: ")
@@ -629,7 +631,7 @@ append_build_icon_elements :: proc(ui_state: ^UIState) {
 	}
 }
 
-append_player_info :: proc(ui_state: ^UIState) {
+append_player_info_elements :: proc(ui_state: ^UIState) {
 	turn_player_text: cstring
 	text_x_offset := MILITARY_TRACK_SIZE.x / 2 + COIN_DIAMETER * 1.75
 	text_y := STARTING_WINDOW_HEIGHT - COIN_DIAMETER * 0.5
@@ -713,7 +715,7 @@ append_player_info :: proc(ui_state: ^UIState) {
 	)
 }
 
-append_player_progress_tokens :: proc(ui_state: ^UIState) {
+append_player_progress_tokens_elements :: proc(ui_state: ^UIState) {
 	for player in swd.Player_ID {
 		pos: int
 		for token in swd.Progress_Token {
@@ -735,6 +737,42 @@ append_player_progress_tokens :: proc(ui_state: ^UIState) {
 	}
 }
 
+
+append_choice_window_elements :: proc(ui_state: ^UIState) {
+	if ui_state.choice_window_hidden {return} else {
+		#partial switch ui_state.game.choice_state {
+		case .Choose_Unavailable_Progress_Token:
+			{
+				append(
+					&ui_state.ui_element_list,
+					UIElement {
+						ui_data = ui.create_rectangle_ui_element(
+							CARD_STRUCTURE_MIDPOINT,
+							{3 * PROGRESS_TOKEN_DIAMETER + 20, PROGRESS_TOKEN_DIAMETER + 10},
+							colour = {0, 0, 0, 212},
+							corner_radius = 5.0,
+						),
+					},
+				)
+				midpoint_dist: [2]f32 = {PROGRESS_TOKEN_DIAMETER + 5.0, 0.0}
+				midpoint_leftmost: [2]f32 = CARD_STRUCTURE_MIDPOINT - midpoint_dist
+				for move, i in ui_state.valid_moves {
+					append(
+						&ui_state.ui_element_list,
+						create_progress_token_ui_element(
+							move.token.?,
+							midpoint_leftmost + f32(i) * midpoint_dist,
+							border_width = SELECTION_BORDER_WIDTH,
+							border_colour = PLAYER_COLOUR[ui_state.game.turn_player],
+						),
+					)
+				}
+			}
+		case .Choose_Card_To_Revive:
+			{}
+		}
+	}
+}
 
 append_token_tooltips :: proc(ui_state: ^UIState) {
 	if ui_state.ui_element_hovered_last_frame.game_function == .ProgressToken {
