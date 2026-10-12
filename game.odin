@@ -119,6 +119,9 @@ handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsKeyReleased(.F) {
 		ui_state.choice_window_hidden = !ui_state.choice_window_hidden
 	}
+	if rl.IsKeyReleased(.G) {
+		ui_state.show_discard_pile = !ui_state.show_discard_pile
+	}
 	if rl.IsKeyReleased(.R) {
 		swd.execute_random_move_safe(ui_state.game)
 		ui_state.last_selected_object = nil

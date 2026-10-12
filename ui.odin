@@ -68,39 +68,42 @@ create_card_stack_elements :: proc(
 	cards: []swd.Object_Name,
 	top_left_card_midpoint: [2]f32,
 	allocator := context.temp_allocator,
-) -> [dynamic]UIElement {
-	elements := make([dynamic]UIElement, 32, allocator)
+) -> (
+	elements: [dynamic]UIElement,
+	cards_per_col: [4]int,
+) {
+	elements.allocator = allocator
 	sorted_cards := slice.clone(cards, context.temp_allocator)
-	for player in swd.Player_ID {
-		slice.sort_by(sorted_cards, proc(i, j: swd.Object_Name) -> bool {
-			return int(i) < int(j)
-		})
 
-		last_col := -1
-		curr_col := 0
-		row := 0
+	slice.sort_by(sorted_cards, proc(i, j: swd.Object_Name) -> bool {
+		return int(i) < int(j)
+	})
 
-		for card in sorted_cards {
-			switch int(card) {
-			case 0 ..< 19:
-				{curr_col = 0}
-			case 19 ..< 40:
-				{curr_col = 1}
-			case 40 ..< 54:
-				{curr_col = 2}
-			case 54 ..< len(swd.Object_Name) + 1:
-				{curr_col = 3}
-			}
-			if curr_col != last_col {
-				row = 0
-				last_col = curr_col
-			} else {row += 1}
-			x := top_left_card_midpoint.x + f32(curr_col) * CARD_SIZE.x
-			y := top_left_card_midpoint.y + f32(row) * CARD_SIZE.y / 4
-			append(&elements, create_game_object_ui_element(card, {x, y}))
+	last_col := -1
+	curr_col := 0
+	row := 0
+
+	for card in sorted_cards {
+		switch int(card) {
+		case 0 ..< 19:
+			{curr_col = 0}
+		case 19 ..< 40:
+			{curr_col = 1}
+		case 40 ..< 54:
+			{curr_col = 2}
+		case 54 ..< len(swd.Object_Name) + 1:
+			{curr_col = 3}
 		}
+		if curr_col != last_col {
+			row = 0
+			last_col = curr_col
+		} else {row += 1}
+		x := top_left_card_midpoint.x + f32(curr_col) * CARD_SIZE.x
+		y := top_left_card_midpoint.y + f32(row) * CARD_SIZE.y / 4
+		append(&elements, create_game_object_ui_element(card, {x, y}))
+		cards_per_col[curr_col] += 1
 	}
-	return elements
+	return
 }
 
 create_progress_token_ui_element :: proc(
@@ -136,7 +139,7 @@ create_progress_token_ui_element :: proc(
 }
 
 
-MAX_UI_ELEMENTS :: 256
+MAX_UI_ELEMENTS :: 512
 UIState :: struct {
 	game:                          ^swd.Game,
 	last_mouse_world_position:     [2]f32,
@@ -148,6 +151,7 @@ UIState :: struct {
 	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
 	cost_overlay_on:               bool,
 	choice_window_hidden:          bool,
+	show_discard_pile:             bool,
 }
 
 
@@ -487,7 +491,7 @@ append_player_card_elements :: proc(ui_state: ^UIState) {
 			}
 		}
 
-		card_elements := create_card_stack_elements(
+		card_elements, _ := create_card_stack_elements(
 			ui_state.game.player_states[player].cards_constructed[:],
 			{x_base, WONDER_SIZE.y * 2 + 115},
 		)
@@ -719,13 +723,18 @@ append_player_progress_tokens_elements :: proc(ui_state: ^UIState) {
 	for player in swd.Player_ID {
 		pos: int
 		for token in swd.Progress_Token {
+			mid_point: [2]f32 = {0, PROGRESS_TOKEN_Y_POS}
+			x_offset := f32(pos) * (PROGRESS_TOKEN_DIAMETER * 0.75)
 			if token in ui_state.game.player_states[player].progress_tokens {
-				mid_point: [2]f32 = {P1_PROGRESS_TOKEN_X_POS, PROGRESS_TOKEN_Y_POS}
 				switch player {
 				case .P1:
-					{mid_point.x += f32(pos) * (PROGRESS_TOKEN_DIAMETER * 0.75)}
+					{
+						mid_point.x = P1_PROGRESS_TOKEN_X_POS + x_offset
+					}
 				case .P2:
-					{mid_point.x -= f32(pos) * (PROGRESS_TOKEN_DIAMETER * 0.75)}
+					{
+						mid_point.x = P2_PROGRESS_TOKEN_X_POS - x_offset
+					}
 				}
 				append(
 					&ui_state.ui_element_list,
@@ -738,41 +747,70 @@ append_player_progress_tokens_elements :: proc(ui_state: ^UIState) {
 }
 
 
-append_choice_window_elements :: proc(ui_state: ^UIState) {
-	if ui_state.choice_window_hidden {return} else {
-		#partial switch ui_state.game.choice_state {
-		case .Choose_Unavailable_Progress_Token:
-			{
-				append(
-					&ui_state.ui_element_list,
-					UIElement {
-						ui_data = ui.create_rectangle_ui_element(
-							CARD_STRUCTURE_MIDPOINT,
-							{3 * PROGRESS_TOKEN_DIAMETER + 20, PROGRESS_TOKEN_DIAMETER + 10},
-							colour = {0, 0, 0, 212},
-							corner_radius = 5.0,
-						),
-					},
-				)
-				midpoint_dist: [2]f32 = {PROGRESS_TOKEN_DIAMETER + 5.0, 0.0}
-				midpoint_leftmost: [2]f32 = CARD_STRUCTURE_MIDPOINT - midpoint_dist
-				for move, i in ui_state.valid_moves {
-					append(
-						&ui_state.ui_element_list,
-						create_progress_token_ui_element(
-							move.token.?,
-							midpoint_leftmost + f32(i) * midpoint_dist,
-							border_width = SELECTION_BORDER_WIDTH,
-							border_colour = PLAYER_COLOUR[ui_state.game.turn_player],
-						),
-					)
-				}
-			}
-		case .Choose_Card_To_Revive:
-			{}
+append_discarded_card_elements :: proc(ui_state: ^UIState) {
+	top_left_card_midpoint: [2]f32 =
+		CARD_STRUCTURE_MIDPOINT - {CARD_SIZE.x * 1.5, CARD_SIZE.y * 0.5}
+	cards, cards_per_col := create_card_stack_elements(
+		ui_state.game.cards_discarded[:],
+		top_left_card_midpoint,
+	)
+	bounding_box_size: [2]f32 =
+		{CARD_SIZE.x * 4, CARD_SIZE.y * (0.75 + f32(slice.max(cards_per_col[:])) * 0.25)} + 20
+	append(
+		&ui_state.ui_element_list,
+		UIElement {
+			ui_data = ui.create_rectangle_ui_element(
+				CARD_STRUCTURE_MIDPOINT + {0.0, -CARD_SIZE.y * 1.0 - 10 + bounding_box_size.y / 2},
+				bounding_box_size,
+				colour = {0, 0, 0, 212},
+				corner_radius = 8,
+			),
+		},
+	)
+	for &card in cards {
+		if ui_state.game.choice_state == .Choose_Card_To_Revive {
+			card.ui_data.border_colour = PLAYER_COLOUR[ui_state.game.turn_player]
+			card.ui_data.border_width = SELECTION_BORDER_WIDTH
 		}
+		append(&ui_state.ui_element_list, card)
 	}
 }
+
+
+append_choice_window_elements :: proc(ui_state: ^UIState) {
+	if ui_state.game.choice_state == .Choose_Unavailable_Progress_Token &&
+	   !ui_state.choice_window_hidden {
+		append(
+			&ui_state.ui_element_list,
+			UIElement {
+				ui_data = ui.create_rectangle_ui_element(
+					CARD_STRUCTURE_MIDPOINT,
+					{3 * PROGRESS_TOKEN_DIAMETER + 20, PROGRESS_TOKEN_DIAMETER + 10},
+					colour = {0, 0, 0, 212},
+					corner_radius = 8,
+				),
+			},
+		)
+		midpoint_dist: [2]f32 = {PROGRESS_TOKEN_DIAMETER + 5.0, 0.0}
+		midpoint_leftmost: [2]f32 = CARD_STRUCTURE_MIDPOINT - midpoint_dist
+		for move, i in ui_state.valid_moves {
+			append(
+				&ui_state.ui_element_list,
+				create_progress_token_ui_element(
+					move.token.?,
+					midpoint_leftmost + f32(i) * midpoint_dist,
+					border_width = SELECTION_BORDER_WIDTH,
+					border_colour = PLAYER_COLOUR[ui_state.game.turn_player],
+				),
+			)
+		}
+	}
+	if (ui_state.game.choice_state == .Choose_Card_To_Revive && !ui_state.choice_window_hidden) ||
+	   ui_state.show_discard_pile {
+		append_discarded_card_elements(ui_state)
+	}
+}
+
 
 append_token_tooltips :: proc(ui_state: ^UIState) {
 	if ui_state.ui_element_hovered_last_frame.game_function == .ProgressToken {
