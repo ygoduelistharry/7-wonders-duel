@@ -130,7 +130,7 @@ load_card_back_textures :: proc() -> (textures: [Game_Object_Kind]rl.Texture2D) 
 
 load_progress_token_textures :: proc() -> (textures: [swd.Progress_Token]rl.Texture2D) {
 	textures[.Agriculture] = rl.LoadTexture("images/agriculture.png")
-	textures[.Architechture] = rl.LoadTexture("images/architecture.png")
+	textures[.Architecture] = rl.LoadTexture("images/architecture.png")
 	textures[.Economy] = rl.LoadTexture("images/economy.png")
 	textures[.Law] = rl.LoadTexture("images/law.png")
 	textures[.Masonry] = rl.LoadTexture("images/masonry.png")

@@ -17,7 +17,7 @@ Science_Symbol :: enum u8 {
 
 Progress_Token :: enum u16 {
 	Agriculture,
-	Architechture,
+	Architecture,
 	Economy,
 	Law,
 	Masonry,
@@ -30,16 +30,16 @@ Progress_Token :: enum u16 {
 Progress_Tokens :: distinct bit_set[Progress_Token;u16]
 @(rodata)
 progress_token_description: [Progress_Token]string = {
-	.Agriculture   = "Gain 6 coins. Worth 4 VP.",
-	.Architechture = "Future Wonders built by you cost 2 fewer resources.",
-	.Economy       = "You gain money spent by your opponent when they trade for resources",
-	.Law           = "Worth 1 scientific symbol.",
-	.Masonry       = "Blue cards built by you cost 2 fewer resources.",
-	.Mathematics   = "Worth 3 VP per Progress token at end of game (including itself).",
-	.Philosophy    = "Worth 7 VP",
-	.Strategy      = "Red cards built by you provide +1 shield.",
-	.Theology      = "Future Wonders built by you have 'Play Again'",
-	.Urbanism      = "Gain 6 coins. When constructing a building for free via linking symbol, gain 4 coins.",
+	.Agriculture  = "Gain 6 coins. Worth 4 VP.",
+	.Architecture = "Future Wonders built by you cost 2 fewer resources.",
+	.Economy      = "You gain money spent by your opponent when they trade for resources",
+	.Law          = "Worth 1 scientific symbol.",
+	.Masonry      = "Blue cards built by you cost 2 fewer resources.",
+	.Mathematics  = "Worth 3 VP per Progress token at end of game (including itself).",
+	.Philosophy   = "Worth 7 VP",
+	.Strategy     = "Red cards built by you provide +1 shield.",
+	.Theology     = "Future Wonders built by you have 'Play Again'",
+	.Urbanism     = "Gain 6 coins. When constructing a building for free via linking symbol, gain 4 coins.",
 }
 
 Linking_Symbol :: enum u32 {
@@ -134,23 +134,23 @@ Object_Base_Cost :: struct {
 }
 
 Player_State :: struct {
-	cards_constructed:                  [dynamic; 30]Object_Name,
-	wonders:                            [dynamic; 4]Object_Name,
-	cards_tucked:                       [4]Object_Name,
-	object_kind_count_owned:            [Object_Colour]int,
-	player_id:                          Player_ID,
-	coins:                              int,
-	resource_production:                [Resource]int,
-	resource_trade_price:               [Resource]int,
-	variable_brown_resource_production: int,
-	variable_grey_resource_production:  int,
-	progress_tokens:                    Progress_Tokens,
-	science_symbols:                    [Science_Symbol]int,
-	unique_science_symbols:             int,
-	linking_symbols:                    Linking_Symbols,
-	fixed_vp_from_blue:                 int,
-	fixed_vp_from_other:                int,
-	guilds_built:                       Guilds,
+	cards_constructed:            [dynamic; 30]Object_Name,
+	wonders:                      [dynamic; 4]Object_Name,
+	cards_tucked:                 [4]Object_Name,
+	object_kind_count_owned:      [Object_Colour]int,
+	player_id:                    Player_ID,
+	coins:                        int,
+	resource_production:          [Resource]int,
+	resource_trade_price:         [Resource]int,
+	generic_brown_res_production: int,
+	generic_grey_res_production:  int,
+	progress_tokens:              Progress_Tokens,
+	science_symbols:              [Science_Symbol]int,
+	unique_science_symbols:       int,
+	linking_symbols:              Linking_Symbols,
+	fixed_vp_from_blue:           int,
+	fixed_vp_from_other:          int,
+	guilds_built:                 Guilds,
 }
 count_constructed_wonders_player :: proc(player: Player_State) -> int {
 	count := 0
@@ -345,17 +345,19 @@ get_object_cost :: proc(
 		if resource in grey_resources {extra_grey_res_required += value}
 	}
 
-	variable_brown_res_available := player.variable_brown_resource_production
-	variable_grey_res_available := player.variable_grey_resource_production
+	generic_brown_res_available := player.generic_brown_res_production
+	generic_grey_res_available := player.generic_grey_res_production
 
-	extra_brown_res_required = max(0, extra_brown_res_required - variable_brown_res_available)
-	extra_grey_res_required = max(0, extra_grey_res_required - variable_grey_res_available)
+	extra_brown_res_required = max(0, extra_brown_res_required - generic_brown_res_available)
+	extra_grey_res_required = max(0, extra_grey_res_required - generic_grey_res_available)
 
 	// do an early check for masonry and architecture
 	total_extra_res_required := extra_brown_res_required + extra_grey_res_required
+	generic_res_available := 0
 	if (object.colour == .Blue && .Masonry in player.progress_tokens) ||
-	   (object.colour == .Wonder && .Architechture in player.progress_tokens) {
+	   (object.colour == .Wonder && .Architecture in player.progress_tokens) {
 		total_extra_res_required -= 2
+		generic_res_available = 2
 	}
 	// if we can cover our production without considering trading then we are done. if not...
 	if total_extra_res_required <= 0 {
@@ -364,7 +366,7 @@ get_object_cost :: proc(
 
 
 	// if we have no varaible resource production, no need to sort.
-	if variable_brown_res_available + variable_grey_res_available <= 0 {
+	if generic_brown_res_available + generic_grey_res_available + generic_res_available <= 0 {
 		traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
 		return {
 			building_coin_cost + traded_coin_cost,
@@ -391,16 +393,20 @@ get_object_cost :: proc(
 	for kvp in resource_costs {
 		// if kvp.value == 0 {continue}
 		if kvp.resource in brown_resources {
-			for extra_res_required[kvp.resource] > 0 && variable_brown_res_available > 0 {
+			for extra_res_required[kvp.resource] > 0 && generic_brown_res_available > 0 {
 				extra_res_required[kvp.resource] -= 1
-				variable_brown_res_available -= 1
+				generic_brown_res_available -= 1
 			}
 		}
 		if kvp.resource in grey_resources {
-			for extra_res_required[kvp.resource] > 0 && variable_grey_res_available > 0 {
+			for extra_res_required[kvp.resource] > 0 && generic_grey_res_available > 0 {
 				extra_res_required[kvp.resource] -= 1
-				variable_grey_res_available -= 1
+				generic_grey_res_available -= 1
 			}
+		}
+		for extra_res_required[kvp.resource] > 0 && generic_res_available > 0 {
+			extra_res_required[kvp.resource] -= 1
+			generic_res_available -= 1
 		}
 	}
 	traded_coin_cost := dot(player.resource_trade_price, extra_res_required)
@@ -700,8 +706,8 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		if resource in object.fixed_cost_resource_produced {value = 1}
 	}
 
-	player.variable_brown_resource_production += object.variable_brown_resource_produced
-	player.variable_grey_resource_production += object.variable_grey_resource_produced
+	player.generic_brown_res_production += object.variable_brown_resource_produced
+	player.generic_grey_res_production += object.variable_grey_resource_produced
 
 	if object.colour == .Blue {
 		player.fixed_vp_from_blue += object.vp_produced
@@ -774,16 +780,15 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 	if object.go_again || (.Theology in player.progress_tokens && object.colour == .Wonder) {
 		game.go_again_active = true
 	}
-	if object.gain_unavailable_progress_token {game.choice_state = .Choose_Unavailable_Progress_Token}
-	if object.destroy_brown_card && opponent.object_kind_count_owned[.Brown] > 0 {
+	if object.gain_unavailable_progress_token {
+		game.choice_state = .Choose_Unavailable_Progress_Token
+	} else if object.destroy_brown_card && opponent.object_kind_count_owned[.Brown] > 0 {
 		game.choice_state = .Choose_Brown_Card_To_Destroy
-	}
-	if object.destroy_grey_card && opponent.object_kind_count_owned[.Grey] > 0 {
+	} else if object.destroy_grey_card && opponent.object_kind_count_owned[.Grey] > 0 {
 		game.choice_state = .Choose_Grey_Card_To_Destroy
-	}
-	if object.revive_card && len(game.cards_discarded) > 0 {
+	} else if object.revive_card && len(game.cards_discarded) > 0 {
 		game.choice_state = .Choose_Card_To_Revive
-	}
+	} else {game.choice_state = .Choose_Object_To_Construct_Or_Discard}
 }
 
 // Returns the card removed from the slot (will be nil if slot was empty)
@@ -820,7 +825,7 @@ gain_progress_token :: proc(token: Progress_Token, player_id: Player_ID, game: ^
 			player.fixed_vp_from_other += 4
 			player.coins += 6
 		}
-	case .Architechture:
+	case .Architecture:
 		{}
 	case .Economy:
 		{}
@@ -922,7 +927,6 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	case .Construct_Card:
 		{
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
@@ -930,11 +934,12 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			slot := &board[move.slot_idx.?]
 			card_to_construct := remove_card_from_board(slot, game)
 			construct_object(card_to_construct.?, move.acting_player, game)
-			change_turn_player(game)
+			if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
+				change_turn_player(game)
+			}
 		}
 	case .Construct_Wonder:
 		{
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
@@ -948,7 +953,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 					break
 				}
 			}
-			if !game.go_again_active {
+			if !game.go_again_active &&
+			   game.choice_state == .Choose_Object_To_Construct_Or_Discard {
 				change_turn_player(game)
 			}
 			game.go_again_active = false
@@ -959,16 +965,15 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			card_to_discard := remove_card_from_board(slot, game)
 			player.coins += 2 + player.object_kind_count_owned[.Yellow]
 			append(&game.cards_discarded, card_to_discard.?)
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			change_turn_player(game)
 		}
 	case .Select_Progress_Token:
 		{
 			gain_progress_token(move.token.?, move.acting_player, game)
-			if move.choice_state == .Choose_Progress_Token {
+			if game.choice_state == .Choose_Progress_Token {
 				game.progress_tokens_available[move.token_idx.?] = nil
 			}
-			if move.choice_state == .Choose_Unavailable_Progress_Token {
+			if game.choice_state == .Choose_Unavailable_Progress_Token {
 				unordered_remove(&game.progress_tokens_unavailable, move.token_idx.?)
 			}
 			game.choice_state = .Choose_Object_To_Construct_Or_Discard
@@ -976,28 +981,32 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	case .Select_Card:
 		{
-			if move.choice_state == .Choose_Card_To_Revive {
+			if game.choice_state == .Choose_Card_To_Revive {
 				unordered_remove(&game.cards_discarded, move.card_idx.?)
 				construct_object(move.card_name.?, move.acting_player, game)
-			}
-			if move.choice_state == .Choose_Brown_Card_To_Destroy ||
-			   move.choice_state == .Choose_Grey_Card_To_Destroy {
+			} else if game.choice_state == .Choose_Brown_Card_To_Destroy ||
+			   game.choice_state == .Choose_Grey_Card_To_Destroy {
 				unordered_remove(&opponent.cards_constructed, move.card_idx.?)
 				append(&game.cards_discarded, move.card_name.?)
 				card_data := objects_db[move.card_name.?]
 				opponent.object_kind_count_owned[card_data.colour] -= 1
 				opponent.resource_production -= card_data.resources_produced
+				game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			}
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
-			change_turn_player(game)
+			if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
+				change_turn_player(game)
+			}
 		}
 	case .Select_Player:
 		{
-			if move.choice_state == .Choose_First_Player {
+			if game.choice_state == .Choose_First_Player {
 				game.turn_player = move.chosen_player.?
-				game.go_again_active = true
 			}
-			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			if game.age == .DraftWonders {
+				game.choice_state = .Choose_Wonder_To_Draft
+			} else {
+				game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			}
 		}
 	}
 
