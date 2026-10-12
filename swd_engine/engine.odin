@@ -775,9 +775,15 @@ construct_object :: proc(object_name: Object_Name, player_id: Player_ID, game: ^
 		game.go_again_active = true
 	}
 	if object.gain_unavailable_progress_token {game.choice_state = .Choose_Unavailable_Progress_Token}
-	if object.destroy_brown_card {game.choice_state = .Choose_Brown_Card_To_Destroy}
-	if object.destroy_grey_card {game.choice_state = .Choose_Grey_Card_To_Destroy}
-	if object.revive_card {game.choice_state = .Choose_Card_To_Revive}
+	if object.destroy_brown_card && opponent.object_kind_count_owned[.Brown] > 0 {
+		game.choice_state = .Choose_Brown_Card_To_Destroy
+	}
+	if object.destroy_grey_card && opponent.object_kind_count_owned[.Grey] > 0 {
+		game.choice_state = .Choose_Grey_Card_To_Destroy
+	}
+	if object.revive_card && len(game.cards_discarded) > 0 {
+		game.choice_state = .Choose_Card_To_Revive
+	}
 }
 
 // Returns the card removed from the slot (will be nil if slot was empty)
@@ -891,11 +897,6 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 	player := &game.player_states[move.acting_player]
 	opponent := &game.player_states[Player_ID(-1 * int(move.acting_player))]
 
-	// the most common next state is constructing an object or discarding for coins.
-	// the switch statement will set the next state differently if appropriate.
-	// the Move struct stores the choice_state when the move was made if it's needed
-	game.choice_state = .Choose_Object_To_Construct_Or_Discard
-
 	switch move.move_kind {
 	case .None:
 		{return}
@@ -906,7 +907,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			// we do a snake draft, so players double pick when there are 6 and 2 wonders left
 			wonders_left := &game.objects_left_in_age
 			wonders_left^ -= 1
-			if wonders_left^ != 6 || wonders_left^ != 2 {
+			if wonders_left^ != 6 && wonders_left^ != 2 {
 				change_turn_player(game)
 			}
 			// reveal the next 4 wonders to draft if necessary
@@ -921,6 +922,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 		}
 	case .Construct_Card:
 		{
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
@@ -928,9 +930,11 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			slot := &board[move.slot_idx.?]
 			card_to_construct := remove_card_from_board(slot, game)
 			construct_object(card_to_construct.?, move.acting_player, game)
+			change_turn_player(game)
 		}
 	case .Construct_Wonder:
 		{
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
@@ -944,6 +948,10 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 					break
 				}
 			}
+			if !game.go_again_active {
+				change_turn_player(game)
+			}
+			game.go_again_active = false
 		}
 	case .Discard_For_Coins:
 		{
@@ -951,6 +959,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			card_to_discard := remove_card_from_board(slot, game)
 			player.coins += 2 + player.object_kind_count_owned[.Yellow]
 			append(&game.cards_discarded, card_to_discard.?)
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			change_turn_player(game)
 		}
 	case .Select_Progress_Token:
 		{
@@ -961,6 +971,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			if move.choice_state == .Choose_Unavailable_Progress_Token {
 				unordered_remove(&game.progress_tokens_unavailable, move.token_idx.?)
 			}
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			change_turn_player(game)
 		}
 	case .Select_Card:
 		{
@@ -976,6 +988,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				opponent.object_kind_count_owned[card_data.colour] -= 1
 				opponent.resource_production -= card_data.resources_produced
 			}
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
+			change_turn_player(game)
 		}
 	case .Select_Player:
 		{
@@ -983,6 +997,7 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				game.turn_player = move.chosen_player.?
 				game.go_again_active = true
 			}
+			game.choice_state = .Choose_Object_To_Construct_Or_Discard
 		}
 	}
 
@@ -1003,6 +1018,8 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 				// if military is a tie, the last action taker choses first
 				// so we dont need to change the turn player
 				game.choice_state = .Choose_First_Player
+			} else {
+				game.choice_state = .Choose_Object_To_Construct_Or_Discard
 			}
 		} else {
 			game.completed = true
@@ -1018,13 +1035,6 @@ execute_move_unsafe :: proc(move: Move, game: ^Game) {
 			}
 		}
 		return
-	}
-
-	if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
-		if !game.go_again_active {
-			change_turn_player(game)
-		}
-		game.go_again_active = false
 	}
 }
 
