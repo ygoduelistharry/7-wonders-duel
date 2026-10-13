@@ -402,7 +402,7 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			can_afford := wonder_cost.can_afford
 			turn_player_owns_wonder := ui_state.game.turn_player == player_id
 			wonder_built := int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0
-			seven_wonders_built := swd.count_constructed_wonders(ui_state.game^) >= 7
+			seven_wonders_built := swd.get_constructed_wonders_count(ui_state.game^) >= 7
 
 			//drawing options
 			tint := rl.WHITE
