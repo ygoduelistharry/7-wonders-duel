@@ -75,7 +75,6 @@ init_ui :: proc() {
 	load_fonts()
 }
 
-
 handle_input :: proc(ui_state: ^UIState) {
 	#reverse for ui_element in ui_state.ui_element_list {
 		if rl.CheckCollisionPointRec(
@@ -105,14 +104,7 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.game.age = .Age3
 		ui_state.valid_moves_dirty = true
 	}
-	if rl.IsKeyReleased(.S) {
-		ui_state.game.military_track -= 1
-		ui_state.valid_moves_dirty = true
-	}
-	if rl.IsKeyReleased(.D) {
-		ui_state.game.military_track += 1
-		ui_state.valid_moves_dirty = true
-	}
+
 	if rl.IsKeyReleased(.C) {
 		ui_state.cost_overlay_on = !ui_state.cost_overlay_on
 	}
@@ -127,12 +119,19 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.last_selected_object = nil
 		ui_state.valid_moves_dirty = true
 	}
+	if rl.IsKeyReleased(.T) {
+		restart_game(ui_state)
+	}
+	if rl.IsKeyReleased(.E) {
+		swd.undo_move(ui_state.game)
+		ui_state.valid_moves_dirty = true
+		ui_state.last_selected_object = nil
+	}
 
 	if rl.IsMouseButtonReleased(.LEFT) {
-		fmt.print(ui_state.last_mouse_world_position)
-		fmt.print(" : ")
-
-		print_ui_element_name(ui_state.ui_element_hovered_last_frame)
+		// fmt.print(ui_state.last_mouse_world_position)
+		// fmt.print(" : ")
+		// print_ui_element_name(ui_state.ui_element_hovered_last_frame)
 		handle_click(ui_state.ui_element_hovered_last_frame, ui_state)
 	}
 
@@ -266,5 +265,11 @@ draw_frame :: proc(ui_state: ^UIState) {
 
 	rl.EndMode2D()
 	rl.EndDrawing()
+}
+
+restart_game :: proc(ui_state: ^UIState, same_seed: bool = true) {
+	swd.restart_game(ui_state.game, same_seed)
+	ui_state.valid_moves_dirty = true
+	ui_state.last_selected_object = nil
 }
 

@@ -1,6 +1,6 @@
 package swd_engine
 
-// Generally shouldnt call any procs in this file directly.
+// Generally shouldn't call any procs in this file directly.
 // These are mostly called by execute_move_unsafe()
 
 change_turn_player :: proc(game: ^Game) {
@@ -13,8 +13,7 @@ construct_object :: proc(
 	object_name: Object_Name,
 	player_id: Player_ID,
 	game: ^Game,
-) -> (
-	events: Events_Log,
+	move: Maybe(^Move) = nil,
 ) {
 	object := objects_db[object_name]
 	player := &game.player_states[player_id]
@@ -31,7 +30,7 @@ construct_object :: proc(
 	if .Urbanism in player.progress_tokens &&
 	   object.cost.free_construction_symbol in player.linking_symbols {
 		coin_gain += 4
-		events.urbanism_triggered = true
+		if move != nil {move.?.resolution_log.urbanism_triggered = true}
 	}
 	if object.colour == .Purple {
 		_, coin_from_guild := get_guild_value(object.guild, player_id, game^)
@@ -39,7 +38,7 @@ construct_object :: proc(
 	}
 
 	player.coins += coin_gain
-	events.gained_coins += coin_gain
+	if move != nil {move.?.resolution_log.gained_coins += coin_gain}
 
 	player.resource_production += object.resources_produced
 	if object.colour == .Brown || object.colour == .Grey {
@@ -59,56 +58,57 @@ construct_object :: proc(
 
 	if object.colour == .Blue {
 		player.fixed_vp_from_blue += object.vp_produced
-		events.gained_blue_vp = object.vp_produced
+		if move != nil {move.?.resolution_log.gained_blue_vp = object.vp_produced}
 	} else {
 		player.fixed_vp_from_other += object.vp_produced
-		events.gained_other_vp = object.vp_produced
+		if move != nil {move.?.resolution_log.gained_other_vp = object.vp_produced}
 	}
 
 	if symbol, ok := object.linking_symbol_produced.?; ok {player.linking_symbols |= {symbol}}
 
 	if object.colour == .Red {
 		game.military_track += int(player_id) * object.military_produced
-		events.military_track_change += int(player_id) * object.military_produced
+		if move !=
+		   nil {move.?.resolution_log.military_track_change += int(player_id) * object.military_produced}
 		if .Strategy in player.progress_tokens {
 			game.military_track += int(player_id)
-			events.military_track_change += int(player_id)
-			events.strategy_triggered = true
+			if move != nil {move.?.resolution_log.military_track_change += int(player_id)}
+			if move != nil {move.?.resolution_log.strategy_triggered = true}
 		}
 	}
 
-	// destroy opponent coins
+	// Destroy opponent coins and check for military
 	coin_loss := object.coins_destroyed
 	if game.military_track <= -3 && .P1_2 in game.military_tokens_available {
 		coin_loss += 2
 		game.military_tokens_available -= {.P1_2}
-		events.military_tokens_destroyed += {.P1_2}
+		if move != nil {move.?.resolution_log.military_tokens_destroyed += {.P1_2}}
 	}
 	if game.military_track <= -6 && .P1_5 in game.military_tokens_available {
 		coin_loss += 5
 		game.military_tokens_available -= {.P1_5}
-		events.military_tokens_destroyed += {.P1_5}
+		if move != nil {move.?.resolution_log.military_tokens_destroyed += {.P1_5}}
 	}
 	if game.military_track >= 3 && .P2_2 in game.military_tokens_available {
 		coin_loss += 2
 		game.military_tokens_available -= {.P2_2}
-		events.military_tokens_destroyed += {.P2_2}
+		if move != nil {move.?.resolution_log.military_tokens_destroyed += {.P2_2}}
 	}
 	if game.military_track >= 6 && .P2_5 in game.military_tokens_available {
 		coin_loss += 5
 		game.military_tokens_available -= {.P2_5}
-		events.military_tokens_destroyed += {.P2_5}
+		if move != nil {move.?.resolution_log.military_tokens_destroyed += {.P2_5}}
 	}
 	opponent.coins = max(0, opponent.coins - coin_loss)
-	events.opponent_lost_coins = min(opponent.coins, coin_loss)
+	if move != nil {move.?.resolution_log.opponent_lost_coins = min(opponent.coins, coin_loss)}
 
-	// check for military victory
+	// Check for military victory
 	if game.military_track <= -9 {
 		game.choice_state = .Game_Over
 		game.completed = true
 		game.winner = .P1
 		game.victory_type = .Military
-		events.victory_triggered = .Military
+		if move != nil {move.?.resolution_log.victory_triggered = .Military}
 		return
 	}
 	if game.military_track >= 9 {
@@ -116,12 +116,12 @@ construct_object :: proc(
 		game.completed = true
 		game.winner = .P2
 		game.victory_type = .Military
-		events.victory_triggered = .Military
+		if move != nil {move.?.resolution_log.victory_triggered = .Military}
 		return
 	}
 
 
-	// Check for science events
+	// Check for science
 	if symbol, ok := object.science_symbol_produced.?; ok {
 		player.science_symbols[symbol] += 1
 		if player.science_symbols[symbol] == 1 {
@@ -131,13 +131,13 @@ construct_object :: proc(
 				game.completed = true
 				game.winner = player_id
 				game.victory_type = .Science
-				events.victory_triggered = .Science
+				if move != nil {move.?.resolution_log.victory_triggered = .Science}
 				return
 			}
 		}
 		if player.science_symbols[symbol] == 2 {
 			game.choice_state = .Choose_Progress_Token
-			events.science_symbol_paired = symbol
+			if move != nil {move.?.resolution_log.science_symbol_paired = symbol}
 		}
 	}
 
@@ -146,7 +146,7 @@ construct_object :: proc(
 		game.go_again_active = true
 	} else if .Theology in player.progress_tokens && object.colour == .Wonder {
 		game.go_again_active = true
-		events.theology_triggered = true
+		if move != nil {move.?.resolution_log.theology_triggered = true}
 	}
 	if object.gain_unavailable_progress_token {
 		game.choice_state = .Choose_Unavailable_Progress_Token
@@ -191,6 +191,7 @@ gain_progress_token :: proc(
 	token: Progress_Token,
 	player_id: Player_ID,
 	game: ^Game,
+	move: Maybe(^Move) = nil,
 ) -> (
 	events: Events_Log,
 ) {
@@ -213,6 +214,7 @@ gain_progress_token :: proc(
 				game.completed = true
 				game.winner = player_id
 				game.victory_type = .Science
+				if move != nil {move.?.resolution_log.victory_triggered = .Science}
 			}
 		}
 	case .Masonry:

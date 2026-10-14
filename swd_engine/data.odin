@@ -1,5 +1,188 @@
 package swd_engine
 
+Science_Symbol :: enum u8 {
+	Astrolabe,
+	Scales,
+	Sundial,
+	Mortar_And_Pestle,
+	Frame,
+	Quill,
+	Wheel,
+}
+
+Progress_Token :: enum u16 {
+	Agriculture,
+	Architecture,
+	Economy,
+	Law,
+	Masonry,
+	Mathematics,
+	Philosophy,
+	Strategy,
+	Theology,
+	Urbanism,
+}
+Progress_Tokens :: distinct bit_set[Progress_Token;u16]
+@(rodata)
+progress_token_description: [Progress_Token]string = {
+	.Agriculture  = "Gain 6 coins. Worth 4 VP.",
+	.Architecture = "Future Wonders built by you cost 2 fewer resources.",
+	.Economy      = "You gain money spent by your opponent when they trade for resources",
+	.Law          = "Worth 1 scientific symbol.",
+	.Masonry      = "Blue cards built by you cost 2 fewer resources.",
+	.Mathematics  = "Worth 3 VP per Progress token at end of game (including itself).",
+	.Philosophy   = "Worth 7 VP",
+	.Strategy     = "Red cards built by you provide +1 shield.",
+	.Theology     = "Future Wonders built by you have 'Play Again'",
+	.Urbanism     = "Gain 6 coins. When constructing a building for free via linking symbol, gain 4 coins.",
+}
+
+Linking_Symbol :: enum u32 {
+	None,
+	Stable,
+	Garrison,
+	Palisade,
+	Archery_Range,
+	Parade_Ground,
+	Scriptorium,
+	Pharmacist,
+	School,
+	Laboratory,
+	Theatre,
+	Statue,
+	Altar,
+	Temple,
+	Baths,
+	Rostrum,
+	Tavern,
+	Brewery,
+}
+Linking_Symbols :: distinct bit_set[Linking_Symbol;u32]
+
+Military_Token :: enum u8 {
+	P1_2,
+	P1_5,
+	P2_2,
+	P2_5,
+}
+Military_Tokens :: distinct bit_set[Military_Token;u8]
+
+Object_Colour :: enum u8 {
+	Brown,
+	Grey,
+	Yellow,
+	Green,
+	Red,
+	Blue,
+	Purple,
+	Wonder,
+}
+
+Resource :: enum u8 {
+	Clay,
+	Stone,
+	Wood,
+	Glass,
+	Papyrus,
+}
+Resources :: distinct bit_set[Resource;u8]
+Resource_Key_Value_Pair :: struct {
+	resource: Resource,
+	value:    int,
+}
+@(rodata)
+brown_resources: Resources = {.Clay, .Stone, .Wood}
+@(rodata)
+grey_resources: Resources = {.Glass, .Papyrus}
+
+object_kind_dot_product :: proc(r1, r2: [Object_Colour]int) -> int {
+	sum: int
+	for object in Object_Colour {
+		sum += r1[object] * r2[object]
+	}
+	return sum
+}
+resource_dot_product :: proc(r1, r2: [Resource]int) -> (sum: int) {
+	for resource in Resource {
+		sum += r1[resource] * r2[resource]
+	}
+	return sum
+}
+dot :: proc {
+	resource_dot_product,
+	object_kind_dot_product,
+}
+
+
+Guild :: enum u8 {
+	None,
+	Builders_Guild,
+	Moneylenders_Guild,
+	Scientists_Guild,
+	Shipowners_Guild,
+	Merchants_Guild,
+	Magistrates_Guild,
+	Tacticians_Guild,
+}
+Guilds :: distinct bit_set[Guild;u8]
+
+
+Player_ID :: enum i8 {
+	P1 = -1,
+	P2 = 1,
+}
+other_player_id :: proc(player_id: Player_ID) -> Player_ID {return Player_ID(-1 * int(player_id))}
+
+Age :: enum u8 {
+	DraftWonders,
+	Age1,
+	Age2,
+	Age3,
+}
+
+Choice_State :: enum u16 {
+	Game_Over,
+	Choose_Wonder_To_Draft,
+	Choose_Object_To_Construct_Or_Discard,
+	Choose_Progress_Token,
+	Choose_Unavailable_Progress_Token,
+	Choose_Brown_Card_To_Destroy,
+	Choose_Grey_Card_To_Destroy,
+	Choose_Card_To_Revive,
+	Choose_First_Player,
+}
+
+@(rodata)
+choice_state_text: [Choice_State]string = {
+	.Game_Over                             = "Game over.",
+	.Choose_Wonder_To_Draft                = "Choose a wonder to draft.",
+	.Choose_Object_To_Construct_Or_Discard = "Choose an object to construct or discard.",
+	.Choose_Progress_Token                 = "Choose a progress token.",
+	.Choose_Unavailable_Progress_Token     = "Choose a progress token.",
+	.Choose_Brown_Card_To_Destroy          = "Choose a Brown card to destroy.",
+	.Choose_Grey_Card_To_Destroy           = "Choose a Grey card to destroy.",
+	.Choose_Card_To_Revive                 = "Choose a card to revive.",
+	.Choose_First_Player                   = "Choose which player goes first.",
+}
+
+Move_Kind :: enum {
+	None,
+	Draft_Wonder,
+	Construct_Card,
+	Construct_Wonder,
+	Discard_For_Coins,
+	Select_Progress_Token,
+	Select_Card,
+	Select_Player,
+}
+
+Victory_Type :: enum {
+	None,
+	Military,
+	Science,
+	Civilian,
+}
+
 Object :: struct {
 	age:                              Age,
 	colour:                           Object_Colour,
@@ -746,5 +929,87 @@ get_all_wonder_names :: proc() -> [12]Object_Name {
 		}
 	}
 	return names
+}
+
+
+Board_Slot :: struct {
+	age:              Age,
+	id:               int,
+	face_up:          bool,
+	selectable:       bool,
+	covers:           [dynamic; 4]int,
+	covered_by_count: int,
+	card_in_slot:     Maybe(Object_Name),
+}
+
+Board :: [20]Board_Slot
+
+default_age_boards: [Age]Board = #partial {
+	.Age1 = {
+		{age = .Age1, id = 0, face_up = true, selectable = true, covers = {6}},
+		{age = .Age1, id = 1, face_up = true, selectable = true, covers = {6, 7}},
+		{age = .Age1, id = 2, face_up = true, selectable = true, covers = {7, 8}},
+		{age = .Age1, id = 3, face_up = true, selectable = true, covers = {8, 9}},
+		{age = .Age1, id = 4, face_up = true, selectable = true, covers = {9, 10}},
+		{age = .Age1, id = 5, face_up = true, selectable = true, covers = {10}},
+		{age = .Age1, id = 6, covers = {11}, covered_by_count = 2},
+		{age = .Age1, id = 7, covers = {11, 12}, covered_by_count = 2},
+		{age = .Age1, id = 8, covers = {12, 13}, covered_by_count = 2},
+		{age = .Age1, id = 9, covers = {13, 14}, covered_by_count = 2},
+		{age = .Age1, id = 10, covers = {14}, covered_by_count = 2},
+		{age = .Age1, id = 11, face_up = true, covers = {15}, covered_by_count = 2},
+		{age = .Age1, id = 12, face_up = true, covers = {15, 16}, covered_by_count = 2},
+		{age = .Age1, id = 13, face_up = true, covers = {16, 17}, covered_by_count = 2},
+		{age = .Age1, id = 14, face_up = true, covers = {17}, covered_by_count = 2},
+		{age = .Age1, id = 15, covers = {18}, covered_by_count = 2},
+		{age = .Age1, id = 16, covers = {18, 19}, covered_by_count = 2},
+		{age = .Age1, id = 17, covers = {19}, covered_by_count = 2},
+		{age = .Age1, id = 18, face_up = true, covered_by_count = 2},
+		{age = .Age1, id = 19, face_up = true, covered_by_count = 2},
+	},
+	.Age2 = {
+		{age = .Age2, id = 0, face_up = true, selectable = true, covers = {2, 3}},
+		{age = .Age2, id = 1, face_up = true, selectable = true, covers = {3, 4}},
+		{age = .Age2, id = 2, covers = {5, 6}, covered_by_count = 1},
+		{age = .Age2, id = 3, covers = {6, 7}, covered_by_count = 2},
+		{age = .Age2, id = 4, covers = {7, 8}, covered_by_count = 1},
+		{age = .Age2, id = 5, face_up = true, covers = {9, 10}, covered_by_count = 1},
+		{age = .Age2, id = 6, face_up = true, covers = {10, 11}, covered_by_count = 2},
+		{age = .Age2, id = 7, face_up = true, covers = {11, 12}, covered_by_count = 2},
+		{age = .Age2, id = 8, face_up = true, covers = {12, 13}, covered_by_count = 1},
+		{age = .Age2, id = 9, covers = {14, 15}, covered_by_count = 1},
+		{age = .Age2, id = 10, covers = {15, 16}, covered_by_count = 2},
+		{age = .Age2, id = 11, covers = {16, 17}, covered_by_count = 2},
+		{age = .Age2, id = 12, covers = {17, 18}, covered_by_count = 2},
+		{age = .Age2, id = 13, covers = {18, 19}, covered_by_count = 1},
+		{age = .Age2, id = 14, face_up = true, covered_by_count = 1},
+		{age = .Age2, id = 15, face_up = true, covered_by_count = 2},
+		{age = .Age2, id = 16, face_up = true, covered_by_count = 2},
+		{age = .Age2, id = 17, face_up = true, covered_by_count = 2},
+		{age = .Age2, id = 18, face_up = true, covered_by_count = 2},
+		{age = .Age2, id = 19, face_up = true, covered_by_count = 1},
+	},
+	.Age3 = {
+		{age = .Age3, id = 0, face_up = true, selectable = true, covers = {2, 3}},
+		{age = .Age3, id = 1, face_up = true, selectable = true, covers = {3, 4}},
+		{age = .Age3, id = 2, covers = {5, 6}, covered_by_count = 1},
+		{age = .Age3, id = 3, covers = {6, 7}, covered_by_count = 2},
+		{age = .Age3, id = 4, covers = {7, 8}, covered_by_count = 1},
+		{age = .Age3, id = 5, face_up = true, covers = {9}, covered_by_count = 1},
+		{age = .Age3, id = 6, face_up = true, covers = {9}, covered_by_count = 2},
+		{age = .Age3, id = 7, face_up = true, covers = {10}, covered_by_count = 2},
+		{age = .Age3, id = 8, face_up = true, covers = {10}, covered_by_count = 1},
+		{age = .Age3, id = 9, covers = {11, 12}, covered_by_count = 2},
+		{age = .Age3, id = 10, covers = {13, 14}, covered_by_count = 2},
+		{age = .Age3, id = 11, face_up = true, covers = {15}, covered_by_count = 1},
+		{age = .Age3, id = 12, face_up = true, covers = {15, 16}, covered_by_count = 1},
+		{age = .Age3, id = 13, face_up = true, covers = {16, 17}, covered_by_count = 1},
+		{age = .Age3, id = 14, face_up = true, covers = {17}, covered_by_count = 1},
+		{age = .Age3, id = 15, covers = {18}, covered_by_count = 2},
+		{age = .Age3, id = 16, covers = {18, 19}, covered_by_count = 2},
+		{age = .Age3, id = 17, covers = {19}, covered_by_count = 2},
+		{age = .Age3, id = 18, face_up = true, covered_by_count = 2},
+		{age = .Age3, id = 19, face_up = true, covered_by_count = 2},
+	},
 }
 

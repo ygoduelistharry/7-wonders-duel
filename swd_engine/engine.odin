@@ -2,6 +2,7 @@ package swd_engine
 
 import "core:math/bits"
 import "core:math/rand"
+import "core:slice"
 import "core:time"
 
 
@@ -26,19 +27,19 @@ Player_State :: struct {
 }
 
 Move :: struct {
-	choice_state:     Choice_State,
-	acting_player:    Player_ID,
-	move_kind:        Move_Kind,
-	wonder_name:      Maybe(Object_Name),
-	wonder_idx:       Maybe(int),
-	card_name:        Maybe(Object_Name),
-	slot_idx:         Maybe(int),
-	cost:             Maybe(Object_Real_Cost),
-	token:            Maybe(Progress_Token),
-	token_idx:        Maybe(int),
-	card_idx:         Maybe(int),
-	chosen_player:    Maybe(Player_ID),
-	post_move_events: Events_Log,
+	choice_state:   Choice_State,
+	acting_player:  Player_ID,
+	move_kind:      Move_Kind,
+	wonder_name:    Maybe(Object_Name),
+	wonder_idx:     Maybe(int),
+	card_name:      Maybe(Object_Name),
+	slot_idx:       Maybe(int),
+	cost:           Maybe(Object_Real_Cost),
+	token:          Maybe(Progress_Token),
+	token_idx:      Maybe(int),
+	card_idx:       Maybe(int),
+	chosen_player:  Maybe(Player_ID),
+	resolution_log: Events_Log,
 }
 
 Events_Log :: struct {
@@ -92,7 +93,8 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 
 	rng := rand.default_random_generator(&new_game.rng_state)
 
-	new_game.turn_player = rand.choice_enum(Player_ID, rng)
+	players: [2]Player_ID = {.P1, .P2}
+	new_game.turn_player = rand.choice(players[:], rng)
 
 	new_game.age = .DraftWonders
 	new_game.choice_state = .Choose_Wonder_To_Draft
@@ -431,7 +433,6 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 	board := &game.boards[game.age]
 	player := &game.player_states[move.acting_player]
 	opponent := &game.player_states[Player_ID(-1 * int(move.acting_player))]
-	events: Events_Log
 
 	switch move.move_kind {
 	case .None:
@@ -464,10 +465,10 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			}
 			slot := &board[move.slot_idx.?]
 			card_to_construct := remove_card_from_board(slot, game)
-			events = construct_object(card_to_construct.?, move.acting_player, game)
+			construct_object(card_to_construct.?, move.acting_player, game)
 			if .Economy in opponent.progress_tokens {
-				events.economy_triggered = true
-				events.gained_coins = move.cost.?.traded_coin_cost
+				move.resolution_log.economy_triggered = true
+				move.resolution_log.gained_coins = move.cost.?.traded_coin_cost
 			}
 			if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
 				change_turn_player(game)
@@ -478,13 +479,13 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
+				move.resolution_log.economy_triggered = true
+				move.resolution_log.gained_coins = move.cost.?.traded_coin_cost
 			}
 			slot := &board[move.slot_idx.?]
 			card_to_tuck := remove_card_from_board(slot, game)
-			events = construct_object(move.wonder_name.?, move.acting_player, game)
+			construct_object(move.wonder_name.?, move.acting_player, game, move)
 			if .Economy in opponent.progress_tokens {
-				events.economy_triggered = true
-				events.gained_coins = move.cost.?.traded_coin_cost
 			}
 			for wonder, idx in player.wonders {
 				if wonder == move.wonder_name {
@@ -503,13 +504,13 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			slot := &board[move.slot_idx.?]
 			card_to_discard := remove_card_from_board(slot, game)
 			player.coins += 2 + player.object_kind_count_owned[.Yellow]
-			events.gained_coins = 2 + player.object_kind_count_owned[.Yellow]
+			move.resolution_log.gained_coins = 2 + player.object_kind_count_owned[.Yellow]
 			append(&game.cards_discarded, card_to_discard.?)
 			change_turn_player(game)
 		}
 	case .Select_Progress_Token:
 		{
-			gain_progress_token(move.token.?, move.acting_player, game)
+			gain_progress_token(move.token.?, move.acting_player, game, move)
 			if game.choice_state == .Choose_Progress_Token {
 				game.progress_tokens_available[move.token_idx.?] = nil
 			}
@@ -523,7 +524,7 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 		{
 			if game.choice_state == .Choose_Card_To_Revive {
 				unordered_remove(&game.cards_discarded, move.card_idx.?)
-				events = construct_object(move.card_name.?, move.acting_player, game)
+				construct_object(move.card_name.?, move.acting_player, game, move)
 			} else if game.choice_state == .Choose_Brown_Card_To_Destroy ||
 			   game.choice_state == .Choose_Grey_Card_To_Destroy {
 				unordered_remove(&opponent.cards_constructed, move.card_idx.?)
@@ -573,7 +574,7 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			game.completed = true
 			game.choice_state = .Game_Over
 			game.victory_type = .Civilian
-			events.victory_triggered = .Civilian
+			move.resolution_log.victory_triggered = .Civilian
 			vp_p1, blue_vp_p1 := get_victory_point_count(Player_ID.P1, game^)
 			vp_p2, blue_vp_p2 := get_victory_point_count(Player_ID.P2, game^)
 			net_vp, net_blue_vp := vp_p2 - vp_p1, blue_vp_p2 - blue_vp_p1
@@ -586,7 +587,22 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 		}
 	}
 
-	move.post_move_events = events
 	append(&game.move_history, move^)
+}
+
+restart_game :: proc(game: ^Game, same_seed: bool = false) {
+	if same_seed {
+		game^ = create_new_game(i64(game.rng_seed))
+	} else {game^ = create_new_game()}
+}
+
+undo_move :: proc(game: ^Game) {
+	move_history := game.move_history
+	restart_game(game, same_seed = true)
+	i := 0
+	for i < len(move_history) - 1 {
+		execute_move_unsafe(&move_history[i], game)
+		i += 1
+	}
 }
 

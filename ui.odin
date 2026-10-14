@@ -156,7 +156,7 @@ UIState :: struct {
 
 
 update_ui_element_list :: proc(ui_state: ^UIState) {
-	prev_element_count := len(ui_state.ui_element_list)
+	// prev_element_count := len(ui_state.ui_element_list)
 	clear(&ui_state.ui_element_list)
 	append_wonder_draft_elements(ui_state)
 	append_player_wonder_elements(ui_state)
@@ -169,10 +169,10 @@ update_ui_element_list :: proc(ui_state: ^UIState) {
 	append_player_progress_tokens_elements(ui_state)
 	append_choice_window_elements(ui_state)
 	append_token_tooltips(ui_state)
-	if len(ui_state.ui_element_list) != prev_element_count {
-		fmt.print("UIElement count last frame: ")
-		fmt.println(len(ui_state.ui_element_list[:]))
-	}
+	// if len(ui_state.ui_element_list) != prev_element_count {
+	// 	fmt.print("UIElement count last frame: ")
+	// 	fmt.println(len(ui_state.ui_element_list[:]))
+	// }
 }
 
 
