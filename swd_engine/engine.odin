@@ -2,7 +2,6 @@ package swd_engine
 
 import "core:math/bits"
 import "core:math/rand"
-import "core:slice"
 import "core:time"
 
 
@@ -93,8 +92,7 @@ create_new_game :: proc(rng_seed: i64 = -1) -> (new_game: Game) {
 
 	rng := rand.default_random_generator(&new_game.rng_state)
 
-	players: [2]Player_ID = {.P1, .P2}
-	new_game.turn_player = rand.choice(players[:], rng)
+	new_game.turn_player = rand.choice_enum(Player_ID, rng)
 
 	new_game.age = .DraftWonders
 	new_game.choice_state = .Choose_Wonder_To_Draft

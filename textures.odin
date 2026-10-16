@@ -12,11 +12,11 @@ Game_Object_Kind :: enum {
 }
 
 load_object_atlases :: proc() -> (atlases: [Game_Object_Kind]rl.Texture2D) {
-	atlases[.Wonders] = rl.LoadTexture("images/wonders.jpg")
-	atlases[.Age1] = rl.LoadTexture("images/age1.jpg")
-	atlases[.Age2] = rl.LoadTexture("images/age2.jpg")
-	atlases[.Age3] = rl.LoadTexture("images/age3.jpg")
-	atlases[.Guilds] = rl.LoadTexture("images/guilds.jpg")
+	atlases[.Wonders] = rl.LoadTexture("images/wonders.png")
+	atlases[.Age1] = rl.LoadTexture("images/age1.png")
+	atlases[.Age2] = rl.LoadTexture("images/age2.png")
+	atlases[.Age3] = rl.LoadTexture("images/age3.png")
+	atlases[.Guilds] = rl.LoadTexture("images/guilds.png")
 	for &atlas in atlases {
 		rl.SetTextureFilter(atlas, .BILINEAR)
 	}
