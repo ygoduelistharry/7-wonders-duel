@@ -163,10 +163,8 @@ string_to_word_wrapped_string_list :: proc(
 	[dynamic]string,
 	bool,
 ) {
-	words := strings.split(text, " ")
-	defer delete(words)
-	word_widths := make([dynamic]f32)
-	defer delete(word_widths)
+	words := strings.split(text, " ", context.temp_allocator)
+	word_widths := make([dynamic]f32, context.temp_allocator)
 	space_width := rl.MeasureTextEx(font, " ", font_size, 0).x
 	max_word_width: f32
 	for word in words {
@@ -180,8 +178,7 @@ string_to_word_wrapped_string_list :: proc(
 	if max_word_width > max_line_width {return nil, false}
 
 	curr_line_width: f32
-	curr_line := strings.builder_make()
-	defer strings.builder_destroy(&curr_line)
+	curr_line := strings.builder_make(context.temp_allocator)
 	for word_width, i in word_widths {
 		word := words[i]
 		if curr_line_width == 0 {

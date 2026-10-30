@@ -1,12 +1,17 @@
 package swd_ui
 
 import "core:fmt"
+import "core:log"
 import "core:mem"
 import ui "my_ui"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
 main :: proc() {
+	logger_options := log.Options{.Level}
+	logger := log.create_console_logger(opt = logger_options)
+	context.logger = logger
+	defer log.destroy_console_logger(logger)
 	// tracking allocator
 	when ODIN_DEBUG {
 		track: mem.Tracking_Allocator
@@ -49,6 +54,29 @@ main :: proc() {
 			camera.offset = {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
 		}
 		if ui_state.valid_moves_dirty {
+			switch game.age {
+			case .DraftWonders:
+				{
+					log.infof("-----------------------------------------------------------")
+					log.infof(
+						"| %v Draft Pick: %v",
+						game.turn_player,
+						8 - game.objects_left_in_age + 1,
+					)
+				}
+			case .Age1, .Age2, .Age3:
+				{
+					if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
+						log.infof("-----------------------------------------------------------")
+						log.infof(
+							"| %v's turn (Age %v, Turn %v)",
+							game.turn_player,
+							int(game.age),
+							20 - game.objects_left_in_age + 1,
+						)
+					}
+				}
+			}
 			for player in swd.Player_ID {
 				ui_state.object_costs[player] = swd.get_all_object_costs(ui_state.game^, player)
 			}
@@ -241,7 +269,11 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 		}
 	}
 	if selected_move.move_kind != .None {
-		swd.execute_move_safe(selected_move, ui_state.game)
+		if move, ok := swd.execute_move_safe(selected_move, ui_state.game); ok {
+			swd.log_move(move)
+		} else {
+			log.errorf("Something went wrong! This move should be valid always.\n%v", move)
+		}
 		ui_state.last_selected_object = nil
 		ui_state.valid_moves_dirty = true
 	}

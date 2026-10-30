@@ -1,7 +1,9 @@
 package swd_engine
 
+import "core:log"
 import "core:math/bits"
 import "core:math/rand"
+import "core:strings"
 import "core:time"
 
 
@@ -38,20 +40,21 @@ Move :: struct {
 	token_idx:      Maybe(int),
 	card_idx:       Maybe(int),
 	chosen_player:  Maybe(Player_ID),
-	resolution_log: Events_Log,
+	resolution_log: Move_Resolution_Log,
 }
 
-Events_Log :: struct {
+Move_Resolution_Log :: struct {
 	gained_coins:              int,
 	urbanism_triggered:        bool,
-	opponent_gained_coins:     int,
 	economy_triggered:         bool,
+	opponent_gained_coins:     int,
 	military_track_change:     int,
-	opponent_lost_coins:       int,
-	military_tokens_destroyed: Military_Tokens,
 	strategy_triggered:        bool,
+	military_tokens_destroyed: Military_Tokens,
+	opponent_lost_coins:       int,
 	gained_blue_vp:            int,
 	gained_other_vp:           int,
+	go_again_triggered:        bool,
 	theology_triggered:        bool,
 	science_symbol_paired:     Maybe(Science_Symbol),
 	victory_triggered:         Victory_Type,
@@ -77,7 +80,7 @@ Game :: struct {
 	military_tokens_available:   Military_Tokens,
 	progress_tokens_available:   [dynamic; 5]Maybe(Progress_Token),
 	progress_tokens_unavailable: [dynamic; 10]Progress_Token,
-	end_of_age_triggered:        bool,
+	// end_of_age_triggered:        bool,
 	completed:                   bool,
 	winner:                      Player_ID,
 	victory_type:                Victory_Type,
@@ -413,15 +416,15 @@ get_victory_point_count :: proc(player_id: Player_ID, game: Game) -> (vp: int, b
 }
 
 // To be used externally by programs interacting with the game
-execute_move_safe :: proc(move: Move, game: ^Game) -> bool {
+execute_move_safe :: proc(move: Move, game: ^Game) -> (Move, bool) {
 	valid_moves := get_valid_moves(game^)
 	for &valid_move in valid_moves {
 		if move == valid_move {
 			execute_move_unsafe(&valid_move, game)
-			return true
+			return valid_move, true
 		}
 	}
-	return false
+	return move, false
 }
 
 // Executes a move and progresses the game state --
@@ -449,25 +452,18 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			if wonders_left^ == 4 {
 				game.wonder_ids_draftable += {4, 5, 6, 7}
 			}
-			if game.objects_left_in_age <= 0 {
-				game.end_of_age_triggered = true
-			} else {
-				game.choice_state = .Choose_Wonder_To_Draft
-			}
 		}
 	case .Construct_Card:
 		{
 			player.coins -= move.cost.?.total_coin_cost
 			if .Economy in opponent.progress_tokens {
 				opponent.coins += move.cost.?.traded_coin_cost
-			}
-			slot := &board[move.slot_idx.?]
-			card_to_construct := remove_card_from_board(slot, game)
-			construct_object(card_to_construct.?, move.acting_player, game)
-			if .Economy in opponent.progress_tokens {
 				move.resolution_log.economy_triggered = true
 				move.resolution_log.gained_coins = move.cost.?.traded_coin_cost
 			}
+			slot := &board[move.slot_idx.?]
+			card_to_construct := remove_card_from_board(slot, game)
+			construct_object(card_to_construct.?, move.acting_player, game, move)
 			if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
 				change_turn_player(game)
 			}
@@ -483,8 +479,6 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			slot := &board[move.slot_idx.?]
 			card_to_tuck := remove_card_from_board(slot, game)
 			construct_object(move.wonder_name.?, move.acting_player, game, move)
-			if .Economy in opponent.progress_tokens {
-			}
 			for wonder, idx in player.wonders {
 				if wonder == move.wonder_name {
 					player.cards_tucked[idx] = card_to_tuck.?
@@ -550,13 +544,14 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 	}
 
 
-	if game.end_of_age_triggered {
-		game.end_of_age_triggered = false
-		// if a go-again wonder was played as last card, it doesnt carry over to next age
-		game.go_again_active = false
+	if (game.choice_state == .Choose_Object_To_Construct_Or_Discard ||
+		   game.choice_state == .Choose_Wonder_To_Draft) &&
+	   game.objects_left_in_age <= 0 {
+		// // if a go-again wonder was played as last card, it doesnt carry over to next age
+		// game.go_again_active = false
 		if game.age != .Age3 {
 			game.age = Age(int(game.age) + 1)
-			game.objects_left_in_age = 20
+			game.objects_left_in_age = len(default_age_boards[game.age])
 			// we have a set first player in act 1,
 			// and it should be correct already
 			if game.age != .Age1 {
@@ -584,7 +579,6 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			}
 		}
 	}
-
 	append(&game.move_history, move^)
 }
 
@@ -601,6 +595,141 @@ undo_move :: proc(game: ^Game) {
 	for i < len(move_history) - 1 {
 		execute_move_unsafe(&move_history[i], game)
 		i += 1
+	}
+}
+
+log_move :: proc(move: Move) {
+	switch move.move_kind {
+	case .None:
+		{return}
+	case .Draft_Wonder:
+		{
+			log.infof("%v drafted %v.", move.acting_player, move.wonder_name)
+		}
+	case .Construct_Wonder:
+		{
+			log.infof(
+				"%v spent %v coins to construct %v",
+				move.acting_player,
+				move.cost.?.total_coin_cost,
+				move.wonder_name,
+			)
+			log.infof("(%v tucked)", move.card_name)
+
+			log_object_construction(move)
+
+			if move.resolution_log.go_again_triggered {
+				if move.resolution_log.theology_triggered {
+					log.infof("Go again triggered from Theology.")
+				} else {
+					log.infof("Go again triggered.")
+				}
+			}
+		}
+	case .Construct_Card:
+		{
+			log.infof(
+				"%v spent %v coins to construct %v.",
+				move.acting_player,
+				move.cost.?.total_coin_cost,
+				move.card_name,
+			)
+
+			log_object_construction(move)
+
+		}
+	case .Discard_For_Coins:
+		{
+			log.infof(
+				"%v discarded %v for %v coins.",
+				move.acting_player,
+				move.card_name,
+				move.resolution_log.gained_coins,
+			)
+		}
+	case .Select_Progress_Token:
+		{
+			log.infof("%v gained the %v progress token.", move.acting_player, move.token)
+			if move.resolution_log.gained_coins > 0 {
+				log.infof(
+					"%v gained %v coins.",
+					move.acting_player,
+					move.resolution_log.gained_coins,
+				)
+			}
+		}
+	case .Select_Card:
+		{
+			#partial switch move.choice_state {
+			case .Choose_Brown_Card_To_Destroy, .Choose_Grey_Card_To_Destroy:
+				{
+					log.infof(
+						"%v's card %v was destroyed.",
+						other_player_id(move.acting_player),
+						move.card_name,
+					)
+				}
+			case .Choose_Card_To_Revive:
+				{
+					log.infof("%v revived the card %v.", move.acting_player, move.card_name)
+					log_object_construction(move)
+				}
+			}
+		}
+	case .Select_Player:
+		{
+			if move.acting_player == move.chosen_player {
+				log.infof("%v has chosen to start.", move.acting_player)
+			} else {
+				log.infof("%v has chosen to let %v start.", move.acting_player, move.chosen_player)
+			}
+		}
+	}
+}
+
+log_object_construction :: proc(move: Move) {
+	move_res := move.resolution_log
+	if move_res.economy_triggered {
+		log.infof(
+			"(%v gained %v coins from Economy.)",
+			other_player_id(move.acting_player),
+			move.cost.?.traded_coin_cost,
+		)
+	}
+	if move_res.gained_coins > 0 {
+		log.infof("%v gained %v coins.", move.acting_player, move_res.gained_coins)
+		if move_res.urbanism_triggered {
+			log.infof("(4 coins gained from Urbanism)")
+		}
+	}
+	if move_res.military_track_change != 0 {
+		absolute_track_change := move_res.military_track_change
+		if move_res.military_track_change < 0 {absolute_track_change *= -1}
+		log.infof(
+			"Military pawn moved %v space(s) towards %v",
+			absolute_track_change,
+			other_player_id(move.acting_player),
+		)
+		if move_res.strategy_triggered {
+			log.infof("(1 shield from Strategy)")
+		}
+		if move_res.opponent_lost_coins > 0 {
+			log.infof("A military token was destroyed.")
+		}
+	}
+	if move_res.opponent_lost_coins > 0 {
+		log.infof(
+			"%v lost %v coins.",
+			other_player_id(move.acting_player),
+			move_res.opponent_lost_coins,
+		)
+	}
+	if move_res.science_symbol_paired != nil {
+		log.infof(
+			"%v paired the %v science symbol.",
+			move.acting_player,
+			move_res.science_symbol_paired,
+		)
 	}
 }
 
