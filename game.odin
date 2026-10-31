@@ -8,11 +8,13 @@ import swd "swd_engine"
 import rl "vendor:raylib"
 
 main :: proc() {
+	// set up logging
 	logger_options := log.Options{.Level}
 	logger := log.create_console_logger(opt = logger_options)
 	context.logger = logger
 	defer log.destroy_console_logger(logger)
-	// tracking allocator
+
+	// set up tracking allocator
 	when ODIN_DEBUG {
 		track: mem.Tracking_Allocator
 		mem.tracking_allocator_init(&track, context.allocator)
@@ -54,29 +56,7 @@ main :: proc() {
 			camera.offset = {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
 		}
 		if ui_state.valid_moves_dirty {
-			switch game.age {
-			case .DraftWonders:
-				{
-					log.infof("-----------------------------------------------------------")
-					log.infof(
-						"| %v Draft Pick: %v",
-						game.turn_player,
-						8 - game.objects_left_in_age + 1,
-					)
-				}
-			case .Age1, .Age2, .Age3:
-				{
-					if game.choice_state == .Choose_Object_To_Construct_Or_Discard {
-						log.infof("-----------------------------------------------------------")
-						log.infof(
-							"| %v's turn (Age %v, Turn %v)",
-							game.turn_player,
-							int(game.age),
-							20 - game.objects_left_in_age + 1,
-						)
-					}
-				}
-			}
+			swd.log_turn_info(game)
 			for player in swd.Player_ID {
 				ui_state.object_costs[player] = swd.get_all_object_costs(ui_state.game^, player)
 			}
@@ -143,7 +123,8 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.show_discard_pile = !ui_state.show_discard_pile
 	}
 	if rl.IsKeyReleased(.R) {
-		swd.execute_random_move_safe(ui_state.game)
+		move := swd.execute_random_move_safe(ui_state.game)
+		swd.log_move(move)
 		ui_state.last_selected_object = nil
 		ui_state.valid_moves_dirty = true
 	}
@@ -157,9 +138,6 @@ handle_input :: proc(ui_state: ^UIState) {
 	}
 
 	if rl.IsMouseButtonReleased(.LEFT) {
-		// fmt.print(ui_state.last_mouse_world_position)
-		// fmt.print(" : ")
-		// print_ui_element_name(ui_state.ui_element_hovered_last_frame)
 		handle_click(ui_state.ui_element_hovered_last_frame, ui_state)
 	}
 

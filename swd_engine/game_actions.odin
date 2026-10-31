@@ -18,7 +18,7 @@ construct_object :: proc(
 	object := objects_db[object_name]
 	player := &game.player_states[player_id]
 	opponent := &game.player_states[Player_ID(-1 * int(player_id))]
-	
+
 	// Most common next state. Will get overridden if required.
 	game.choice_state = .Choose_Object_To_Construct_Or_Discard
 
@@ -207,9 +207,9 @@ gain_progress_token :: proc(
 	case .Agriculture:
 		{
 			player.fixed_vp_from_other += 4
-			events.gained_other_vp = 4
+			events.gained_other_vp += 4
 			player.coins += 6
-			events.gained_coins = 6
+			events.gained_coins += 6
 		}
 	case .Architecture:
 		{}
@@ -232,7 +232,7 @@ gain_progress_token :: proc(
 	case .Philosophy:
 		{
 			player.fixed_vp_from_other += 7
-			events.gained_other_vp = 7
+			events.gained_other_vp += 7
 		}
 	case .Strategy:
 		{}
@@ -241,7 +241,7 @@ gain_progress_token :: proc(
 	case .Urbanism:
 		{
 			player.coins += 6
-			events.gained_coins = 6
+			events.gained_coins += 6
 		}
 	}
 	if move != nil {
