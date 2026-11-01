@@ -13,13 +13,12 @@ draw_element :: proc(ui_element: Data) {
 	tint := ui_element.tint.? or_else rl.WHITE
 	if ui_element.label == .None {return}
 	if ui_element.label == .Text {
-		text_size := rl.MeasureTextEx(ui_element.font, ui_element.text, ui_element.font_size, 0)
-		text_position := ui_element.dest_midpoint - text_size / 2
+		text_position := ui_element.dest_midpoint
 		rl.DrawTextPro(
 			ui_element.font,
 			ui_element.text,
 			text_position,
-			{0, 0},
+			ui_element.dest_size / 2,
 			ui_element.rotation,
 			ui_element.font_size,
 			0,
@@ -116,7 +115,8 @@ get_hitbox :: proc(ui_element: Data) -> rl.Rectangle {
 
 create_text_ui_element :: proc(
 	text: string,
-	dest_midpoint: [2]f32,
+	dest_pos: [2]f32,
+	alignment: Alignment = {.CENTRE, .CENTRE},
 	colour: rl.Color,
 	font: rl.Font,
 	font_size: f32 = 0.0,
@@ -125,6 +125,7 @@ create_text_ui_element :: proc(
 ) -> (
 	element: Data,
 ) {
+	element.label = .Text
 	_font_size: f32
 	if font_size == 0.0 {
 		_font_size = f32(font.baseSize)
@@ -132,21 +133,24 @@ create_text_ui_element :: proc(
 		_font_size = font_size
 	}
 	cstring_text := strings.clone_to_cstring(text, allocator)
-	element.label = .Text
+	text_size := rl.MeasureTextEx(font, cstring_text, _font_size, 0)
+	dest_midpoint := get_midpoint(text_size, dest_pos, alignment)
 	element.dest_midpoint = dest_midpoint
+	element.dest_size = text_size
 	element.text = cstring_text
 	element.font_size = _font_size
 	element.text_colour = colour
 	element.font = font
 	if has_hitbox {
 		element.hitbox_midpoint = dest_midpoint
-		element.hitbox_size = rl.MeasureTextEx(element.font, cstring_text, _font_size, 0)
+		element.hitbox_size = text_size
 	}
 	return
 }
 
 create_rectangle_ui_element :: proc(
-	dest_midpoint: [2]f32,
+	dest_pos: [2]f32,
+	alignment: Alignment = {.CENTRE, .CENTRE},
 	size: [2]f32,
 	colour: rl.Color = rl.MAGENTA,
 	border_width: f32 = 0,
@@ -157,9 +161,47 @@ create_rectangle_ui_element :: proc(
 	element: Data,
 ) {
 	element.label = .Visual
+	dest_midpoint := get_midpoint(size, dest_pos, alignment)
 	element.dest_midpoint = dest_midpoint
 	element.dest_size = size
 	element.tint = colour
+	element.border_width = border_width
+	element.border_colour = border_colour
+	element.corner_radius = corner_radius
+	if has_hitbox {
+		element.hitbox_midpoint = dest_midpoint
+		element.hitbox_size = size
+	}
+	return
+}
+
+create_texture_ui_element :: proc(
+	texture: rl.Texture2D,
+	source_rect: rl.Rectangle = {},
+	dest_pos: [2]f32,
+	size: [2]f32,
+	rotation: f32 = 0,
+	tint: rl.Color = rl.WHITE,
+	border_width: f32 = 0,
+	border_colour: rl.Color = rl.MAGENTA,
+	corner_radius: f32 = 0,
+	has_hitbox: bool = true,
+	alignment: Alignment = {.CENTRE, .CENTRE},
+) -> (
+	element: Data,
+) {
+	element.label = .Visual
+	element.texture = texture
+	if source_rect == {} {
+		element.source_rect = {0, 0, f32(texture.width), f32(texture.height)}
+	} else {
+		element.source_rect = source_rect
+	}
+	dest_midpoint := get_midpoint(size, dest_pos, alignment)
+	element.dest_midpoint = dest_midpoint
+	element.dest_size = size
+	element.rotation = rotation
+	element.tint = tint
 	element.border_width = border_width
 	element.border_colour = border_colour
 	element.corner_radius = corner_radius
@@ -285,12 +327,13 @@ create_text_box_fixed_width_elements :: proc(
 	append(
 		&elements,
 		create_rectangle_ui_element(
-			dest_midpoint,
-			box_size,
-			fill_colour,
-			border_width,
-			border_colour,
-			corner_radius,
+			dest_pos = dest_midpoint,
+			alignment = {.CENTRE, .CENTRE},
+			size = box_size,
+			colour = fill_colour,
+			border_width = border_width,
+			border_colour = border_colour,
+			corner_radius = corner_radius,
 		),
 	)
 
@@ -333,9 +376,42 @@ create_text_box_fixed_width_elements :: proc(
 		}
 		append(
 			&elements,
-			create_text_ui_element(line, {x_pos, y_pos}, text_colour, font, font_size),
+			create_text_ui_element(
+				text = line,
+				dest_pos = {x_pos, y_pos},
+				colour = text_colour,
+				font = font,
+				font_size = font_size,
+			),
 		)
 	}
 	return elements
+}
+
+get_midpoint :: proc(
+	size: [2]f32,
+	origin_pos: [2]f32,
+	origin_alignment: Alignment,
+) -> (
+	midpoint: [2]f32,
+) {
+	midpoint = origin_pos
+	switch origin_alignment.x {
+	case .CENTRE:
+		{}
+	case .LEFT:
+		{midpoint.x += origin_pos.x / 2}
+	case .RIGHT:
+		{midpoint.x -= origin_pos.x / 2}
+	}
+	switch origin_alignment.y {
+	case .CENTRE:
+		{}
+	case .TOP:
+		{midpoint.y += origin_pos.y / 2}
+	case .BOTTOM:
+		{midpoint.y -= origin_pos.y / 2}
+	}
+	return
 }
 

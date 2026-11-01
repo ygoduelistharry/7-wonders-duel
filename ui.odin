@@ -56,28 +56,28 @@ create_game_object_ui_element :: proc(
 ) -> (
 	element: UIElement,
 ) {
-	element.ui_data = ui.Data {
-		label           = .Visual,
-		source_rect     = get_game_object_sub_texture_rect(game_object),
-		hitbox_midpoint = dest_midpoint,
-		dest_midpoint   = dest_midpoint,
-		texture         = game_object_atlases[OBJECT_TEXTURE_INFO_DB[game_object].game_object_back],
-		corner_radius   = CARD_CORNER_RADIUS,
-		tint            = tint,
-		border_width    = border_width,
-		border_colour   = border_colour,
-	}
+	_size: [2]f32
 	if size == nil {
 		if swd.game_object_is_card(game_object) {
-			element.ui_data.dest_size = CARD_SIZE
+			_size = CARD_SIZE
 		} else {
-			element.ui_data.dest_size = WONDER_SIZE
+			_size = WONDER_SIZE
 		}
 	} else {
-		element.ui_data.dest_size = size.?
+		_size = size.?
 	}
+	element.ui_data = ui.create_texture_ui_element(
+		texture = game_object_atlases[OBJECT_TEXTURE_INFO_DB[game_object].game_object_back],
+		source_rect = get_game_object_sub_texture_rect(game_object),
+		dest_pos = dest_midpoint,
+		size = _size,
+		corner_radius = CARD_CORNER_RADIUS,
+		tint = tint,
+		border_width = border_width,
+		border_colour = border_colour,
+	)
 	element.game_function = .GameObject
-	element.ui_data.hitbox_size = element.ui_data.dest_size
+	// element.ui_data.hitbox_size = element.ui_data.dest_size
 	element.game_object = game_object
 	return
 }
@@ -135,22 +135,21 @@ create_progress_token_ui_element :: proc(
 ) -> (
 	element: UIElement,
 ) {
-	element.ui_data = ui.Data {
-		label           = .Visual,
-		texture         = progress_token_textures[token],
-		dest_midpoint   = dest_midpoint,
-		hitbox_midpoint = dest_midpoint,
-		rotation        = rotation,
-		border_width    = border_width,
-		border_colour   = border_colour,
-	}
+	_size: [2]f32
 	if diameter == nil {
-		element.ui_data.dest_size = PROGRESS_TOKEN_DIAMETER
+		_size = PROGRESS_TOKEN_DIAMETER
 	} else {
-		element.ui_data.dest_size = diameter.?
+		_size = diameter.?
 	}
-	element.ui_data.hitbox_size = element.ui_data.dest_size
-	element.ui_data.corner_radius = element.ui_data.dest_size.x / 2
+	element.ui_data = ui.create_texture_ui_element(
+		texture = progress_token_textures[token],
+		dest_pos = dest_midpoint,
+		size = _size,
+		rotation = rotation,
+		border_width = border_width,
+		border_colour = border_colour,
+		corner_radius = _size.x / 2,
+	)
 	element.game_function = .ProgressToken
 	element.progress_token = token
 	return
@@ -244,12 +243,12 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 				append(
 					&ui_state.ui_element_list,
 					UIElement {
-						ui_data = ui.Data {
-							label = .Visual,
+						ui_data = ui.create_texture_ui_element(
 							texture = coin_texture,
-							dest_midpoint = midpoint,
-							dest_size = 40,
-						},
+							dest_pos = midpoint,
+							size = 40,
+							has_hitbox = false,
+						),
 					},
 				)
 				append(
@@ -260,7 +259,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 								"%d",
 								ui_state.object_costs[turn_player][card.?].total_coin_cost,
 							),
-							dest_midpoint = midpoint,
+							dest_pos = midpoint,
 							colour = rl.WHITE,
 							font = cost_info_font,
 						),
@@ -273,15 +272,12 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 			append(
 				&ui_state.ui_element_list,
 				UIElement {
-					ui_data = ui.Data {
-						label = .Visual,
+					ui_data = ui.create_texture_ui_element(
 						texture = back_texture,
-						dest_midpoint = midpoint,
-						dest_size = CARD_SIZE,
-						hitbox_midpoint = midpoint,
-						hitbox_size = CARD_SIZE,
+						dest_pos = midpoint,
+						size = CARD_SIZE,
 						corner_radius = CARD_CORNER_RADIUS,
-					},
+					),
 				},
 			)
 		}
@@ -294,12 +290,11 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 	append(
 		&ui_state.ui_element_list,
 		UIElement {
-			ui_data = ui.Data {
-				label = .Visual,
+			ui_data = ui.create_texture_ui_element(
 				texture = military_track_texture,
-				dest_midpoint = MILITARY_TRACK_MIDPOINT,
-				dest_size = MILITARY_TRACK_SIZE,
-			},
+				dest_pos = MILITARY_TRACK_MIDPOINT,
+				size = MILITARY_TRACK_SIZE,
+			),
 		},
 	)
 	//military tokens on the track
@@ -336,13 +331,12 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 		append(
 			&ui_state.ui_element_list,
 			UIElement {
-				ui_data = ui.Data {
-					label = .Visual,
+				ui_data = ui.create_texture_ui_element(
 					texture = token_texture,
-					dest_midpoint = midpoint,
-					dest_size = MILITARY_TOKEN_SIZE,
+					dest_pos = midpoint,
+					size = MILITARY_TOKEN_SIZE,
 					rotation = token_rotation,
-				},
+				),
 			},
 		)
 	}
@@ -351,12 +345,11 @@ append_military_track_elements :: proc(ui_state: ^UIState) {
 	append(
 		&ui_state.ui_element_list,
 		UIElement {
-			ui_data = ui.Data {
-				label = .Visual,
+			ui_data = ui.create_texture_ui_element(
 				texture = conflict_pawn_texture,
-				dest_midpoint = MILITARY_TRACK_MIDPOINT + {pawn_offset, 15 * MILITARY_TRACK_SCALE},
-				dest_size = CONFLICT_PAWN_SIZE,
-			},
+				dest_pos = MILITARY_TRACK_MIDPOINT + {pawn_offset, 15 * MILITARY_TRACK_SCALE},
+				size = CONFLICT_PAWN_SIZE,
+			),
 		},
 	)
 	//available progress tokens
@@ -434,12 +427,11 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 					append(
 						&ui_state.ui_element_list,
 						UIElement {
-							ui_data = ui.Data {
-								label = .Visual,
+							ui_data = ui.create_texture_ui_element(
 								texture = built_icon_texture,
-								dest_midpoint = {x, y},
-								dest_size = 50,
-							},
+								dest_pos = {x, y},
+								size = 50,
+							),
 						},
 					)
 				}
@@ -448,12 +440,12 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 					append(
 						&ui_state.ui_element_list,
 						UIElement {
-							ui_data = ui.Data {
-								label = .Visual,
+							ui_data = ui.create_texture_ui_element(
 								texture = coin_texture,
-								dest_midpoint = {x, y},
-								dest_size = 40,
-							},
+								dest_pos = {x, y},
+								size = 40,
+								has_hitbox = false,
+							),
 						},
 					)
 					append(
@@ -461,7 +453,7 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 						UIElement {
 							ui_data = ui.create_text_ui_element(
 								text = fmt.tprintf("%d", wonder_cost.total_coin_cost),
-								dest_midpoint = {x, y},
+								dest_pos = {x, y},
 								colour = rl.WHITE,
 								font = cost_info_font,
 							),
@@ -532,16 +524,13 @@ append_player_coin_elements :: proc(ui_state: ^UIState) {
 		append(
 			&ui_state.ui_element_list,
 			UIElement {
-				ui_data = ui.Data {
-					label = .Visual,
+				ui_data = ui.create_texture_ui_element(
 					texture = coin_texture,
-					dest_midpoint = coin_position,
-					dest_size = {COIN_DIAMETER, COIN_DIAMETER},
-					hitbox_midpoint = coin_position,
-					hitbox_size = {COIN_DIAMETER, COIN_DIAMETER},
+					dest_pos = coin_position,
+					size = {COIN_DIAMETER, COIN_DIAMETER},
 					border_colour = PLAYER_COLOUR[player],
 					corner_radius = f32(COIN_DIAMETER / 2),
-				},
+				),
 			},
 		)
 		append(
@@ -549,7 +538,7 @@ append_player_coin_elements :: proc(ui_state: ^UIState) {
 			UIElement {
 				ui_data = ui.create_text_ui_element(
 					text = fmt.tprintf("%d", ui_state.game.player_states[player].coins),
-					dest_midpoint = coin_position,
+					dest_pos = coin_position,
 					colour = COIN_FONT_COLOUR,
 					font = coin_font,
 				),
@@ -568,7 +557,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 		&ui_state.ui_element_list,
 		UIElement {
 			ui_data = ui.create_rectangle_ui_element(
-				dest_midpoint = rect_midpoint,
+				dest_pos = rect_midpoint,
 				size = rect_size,
 				colour = TEXT_BOX_COLOUR,
 				corner_radius = 8,
@@ -593,18 +582,15 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 		&ui_state.ui_element_list,
 		UIElement {
 			game_function = .ConstructCardConfirm,
-			ui_data = ui.Data {
-				label = .Visual,
+			ui_data = ui.create_texture_ui_element(
 				texture = build_icon_texture,
-				dest_midpoint = rect_midpoint - offset,
-				dest_size = {icon_diameter, icon_diameter},
-				hitbox_midpoint = rect_midpoint - offset,
-				hitbox_size = {icon_diameter, icon_diameter},
+				dest_pos = rect_midpoint - offset,
+				size = {icon_diameter, icon_diameter},
 				tint = tint,
 				border_width = border_width,
 				border_colour = PLAYER_COLOUR[player],
 				corner_radius = f32(icon_diameter / 2),
-			},
+			),
 		},
 	)
 	append(
@@ -612,7 +598,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 		UIElement {
 			ui_data = ui.create_text_ui_element(
 				text = fmt.tprintf("-%d", build_cost.total_coin_cost),
-				dest_midpoint = rect_midpoint - offset,
+				dest_pos = rect_midpoint - offset,
 				colour = build_cost_text_colour,
 				font = action_confirm_font,
 			),
@@ -623,17 +609,14 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 		&ui_state.ui_element_list,
 		UIElement {
 			game_function = .DiscardForCoinConfirm,
-			ui_data = ui.Data {
-				label = .Visual,
+			ui_data = ui.create_texture_ui_element(
 				texture = coin_texture,
-				dest_midpoint = rect_midpoint + offset,
-				dest_size = {icon_diameter, icon_diameter},
-				hitbox_midpoint = rect_midpoint + offset,
-				hitbox_size = {icon_diameter, icon_diameter},
+				dest_pos = rect_midpoint + offset,
+				size = {icon_diameter, icon_diameter},
 				border_width = border_width,
 				border_colour = PLAYER_COLOUR[player],
 				corner_radius = f32(icon_diameter / 2),
-			},
+			),
 		},
 	)
 	append(
@@ -646,7 +629,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 				),
 				colour = rl.GREEN,
 				font = action_confirm_font,
-				dest_midpoint = rect_midpoint + offset,
+				dest_pos = rect_midpoint + offset,
 			),
 		},
 	)
@@ -680,32 +663,26 @@ append_player_info_elements :: proc(ui_state: ^UIState) {
 		&ui_state.ui_element_list,
 		UIElement {
 			game_function = .SelectP1,
-			ui_data = ui.Data {
-				label = .Visual,
-				dest_size = PLAYER_ICON_SIZE,
-				dest_midpoint = P1_ICON_POS,
-				hitbox_size = PLAYER_ICON_SIZE,
-				hitbox_midpoint = P1_ICON_POS,
+			ui_data = ui.create_texture_ui_element(
+				size = PLAYER_ICON_SIZE,
+				dest_pos = P1_ICON_POS,
 				texture = player_icon_textures[.P1],
 				border_width = border_width,
 				border_colour = border_colour,
-			},
+			),
 		},
 	)
 	append(
 		&ui_state.ui_element_list,
 		UIElement {
 			game_function = .SelectP2,
-			ui_data = ui.Data {
-				label = .Visual,
-				dest_size = PLAYER_ICON_SIZE,
-				dest_midpoint = P2_ICON_POS,
-				hitbox_size = PLAYER_ICON_SIZE,
-				hitbox_midpoint = P2_ICON_POS,
+			ui_data = ui.create_texture_ui_element(
+				size = PLAYER_ICON_SIZE,
+				dest_pos = P2_ICON_POS,
 				texture = player_icon_textures[.P2],
 				border_width = border_width,
 				border_colour = border_colour,
-			},
+			),
 		},
 	)
 }
@@ -751,8 +728,9 @@ append_discarded_card_elements :: proc(ui_state: ^UIState) {
 		&ui_state.ui_element_list,
 		UIElement {
 			ui_data = ui.create_rectangle_ui_element(
-				CARD_STRUCTURE_MIDPOINT + {0.0, -CARD_SIZE.y * 1.0 - 10 + bounding_box_size.y / 2},
-				bounding_box_size,
+				dest_pos = CARD_STRUCTURE_MIDPOINT +
+				{0.0, -CARD_SIZE.y * 1.0 - 10 + bounding_box_size.y / 2},
+				size = bounding_box_size,
 				colour = TEXT_BOX_COLOUR,
 				corner_radius = 8,
 			),
@@ -775,8 +753,8 @@ append_choice_window_elements :: proc(ui_state: ^UIState) {
 			&ui_state.ui_element_list,
 			UIElement {
 				ui_data = ui.create_rectangle_ui_element(
-					CARD_STRUCTURE_MIDPOINT,
-					{3 * PROGRESS_TOKEN_DIAMETER + 20, PROGRESS_TOKEN_DIAMETER + 10},
+					dest_pos = CARD_STRUCTURE_MIDPOINT,
+					size = {3 * PROGRESS_TOKEN_DIAMETER + 20, PROGRESS_TOKEN_DIAMETER + 10},
 					colour = TEXT_BOX_COLOUR,
 					corner_radius = 8,
 				),
@@ -817,7 +795,11 @@ append_log_elements :: proc(ui_state: ^UIState) {
 	append(
 		&ui_state.ui_element_list,
 		UIElement {
-			ui_data = ui.create_rectangle_ui_element(log_midpoint, log_size, TEXT_BOX_COLOUR),
+			ui_data = ui.create_rectangle_ui_element(
+				dest_pos = log_midpoint,
+				size = log_size,
+				colour = TEXT_BOX_COLOUR,
+			),
 		},
 	)
 	lines_drawn := 0
@@ -836,7 +818,7 @@ append_log_elements :: proc(ui_state: ^UIState) {
 			UIElement {
 				ui_data = ui.create_text_ui_element(
 					text = line,
-					dest_midpoint = text_midpoint,
+					dest_pos = text_midpoint,
 					font = log_font,
 					colour = rl.WHITE,
 				),

@@ -24,3 +24,8 @@ Data :: struct {
 	text_colour:     rl.Color,
 }
 
+Alignment :: struct {
+	x: HorizontalPos,
+	y: VerticalPos,
+}
+
