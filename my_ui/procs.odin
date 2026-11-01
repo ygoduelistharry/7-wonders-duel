@@ -15,10 +15,12 @@ draw_element :: proc(ui_element: Data) {
 	if ui_element.label == .Text {
 		text_size := rl.MeasureTextEx(ui_element.font, ui_element.text, ui_element.font_size, 0)
 		text_position := ui_element.dest_midpoint - text_size / 2
-		rl.DrawTextEx(
+		rl.DrawTextPro(
 			ui_element.font,
 			ui_element.text,
 			text_position,
+			{0, 0},
+			ui_element.rotation,
 			ui_element.font_size,
 			0,
 			ui_element.text_colour,
@@ -114,21 +116,32 @@ get_hitbox :: proc(ui_element: Data) -> rl.Rectangle {
 
 create_text_ui_element :: proc(
 	text: string,
-	font_size: f32,
 	dest_midpoint: [2]f32,
 	colour: rl.Color,
 	font: rl.Font,
+	font_size: f32 = 0.0,
+	has_hitbox: bool = false,
+	allocator := context.temp_allocator,
 ) -> (
 	element: Data,
 ) {
+	_font_size: f32
+	if font_size == 0.0 {
+		_font_size = f32(font.baseSize)
+	} else {
+		_font_size = font_size
+	}
+	cstring_text := strings.clone_to_cstring(text, allocator)
 	element.label = .Text
 	element.dest_midpoint = dest_midpoint
-	element.hitbox_midpoint = dest_midpoint
-	element.text = fmt.ctprint(text)
-	element.font_size = font_size
+	element.text = cstring_text
+	element.font_size = _font_size
 	element.text_colour = colour
 	element.font = font
-	element.hitbox_size = rl.MeasureTextEx(element.font, fmt.ctprint(text), font_size, 0)
+	if has_hitbox {
+		element.hitbox_midpoint = dest_midpoint
+		element.hitbox_size = rl.MeasureTextEx(element.font, cstring_text, _font_size, 0)
+	}
 	return
 }
 
@@ -139,6 +152,7 @@ create_rectangle_ui_element :: proc(
 	border_width: f32 = 0,
 	border_colour: rl.Color = rl.MAGENTA,
 	corner_radius: f32 = 0,
+	has_hitbox: bool = true,
 ) -> (
 	element: Data,
 ) {
@@ -149,6 +163,10 @@ create_rectangle_ui_element :: proc(
 	element.border_width = border_width
 	element.border_colour = border_colour
 	element.corner_radius = corner_radius
+	if has_hitbox {
+		element.hitbox_midpoint = dest_midpoint
+		element.hitbox_size = size
+	}
 	return
 }
 
@@ -315,7 +333,7 @@ create_text_box_fixed_width_elements :: proc(
 		}
 		append(
 			&elements,
-			create_text_ui_element(line, font_size, {x_pos, y_pos}, text_colour, font),
+			create_text_ui_element(line, {x_pos, y_pos}, text_colour, font, font_size),
 		)
 	}
 	return elements

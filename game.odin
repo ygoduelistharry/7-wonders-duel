@@ -3,17 +3,23 @@ package swd_ui
 import "core:fmt"
 import "core:log"
 import "core:mem"
+import "core:strings"
 import ui "my_ui"
 import swd "swd_engine"
 import rl "vendor:raylib"
 
-main :: proc() {
-	// set up logging
-	logger_options := log.Options{.Level}
-	logger := log.create_console_logger(opt = logger_options)
-	context.logger = logger
-	defer log.destroy_console_logger(logger)
+log_buffer: [dynamic]string
+game_logger_proc :: proc(
+	data: rawptr,
+	level: log.Level,
+	text: string,
+	options: log.Options,
+	location := #caller_location,
+) {
+	append(&log_buffer, strings.clone(text))
+}
 
+main :: proc() {
 	// set up tracking allocator
 	when ODIN_DEBUG {
 		track: mem.Tracking_Allocator
@@ -37,11 +43,29 @@ main :: proc() {
 		}
 	}
 
+	// set up logging
+	log_buffer = make([dynamic]string)
+	logger_options := log.Options{.Level}
+	console_logger := log.create_console_logger(opt = log.Options{.Level, .Date, .Time})
+	game_logger := log.Logger {
+		procedure = game_logger_proc,
+	}
+	multi_logger := log.create_multi_logger(console_logger, game_logger)
+	context.logger = multi_logger
+	defer {
+		for line in log_buffer {delete(line)}
+		delete(log_buffer)
+		log.destroy_console_logger(console_logger)
+		log.destroy_multi_logger(multi_logger)
+	}
+
+
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 	ui_state: UIState = {
 		game              = &game,
 		valid_moves_dirty = true,
 		cost_overlay_on   = true,
+		log_buffer        = &log_buffer,
 	}
 
 	init_ui()
@@ -135,6 +159,12 @@ handle_input :: proc(ui_state: ^UIState) {
 		swd.undo_move(ui_state.game)
 		ui_state.valid_moves_dirty = true
 		ui_state.last_selected_object = nil
+	}
+	if rl.IsKeyReleased(.B) {
+		ui_state.log_expanded = !ui_state.log_expanded
+	}
+	if rl.IsKeyReleased(.V) {
+		ui_state.show_hitboxes = !ui_state.show_hitboxes
 	}
 
 	if rl.IsMouseButtonReleased(.LEFT) {
@@ -271,7 +301,12 @@ draw_frame :: proc(ui_state: ^UIState) {
 
 	rl.BeginMode2D(camera)
 
-	for element in ui_state.ui_element_list {ui.draw_element(element.ui_data)}
+	for element in ui_state.ui_element_list {
+		ui.draw_element(element.ui_data)
+		if ui_state.show_hitboxes {
+			rl.DrawRectangleLinesEx(ui.get_hitbox(element.ui_data), 1, rl.MAGENTA)
+		}
+	}
 
 	rl.EndMode2D()
 	rl.EndDrawing()
