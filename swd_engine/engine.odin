@@ -11,6 +11,7 @@ Player_State :: struct {
 	cards_tucked:                 [4]Object_Name,
 	object_kind_count_owned:      [Object_Colour]int,
 	player_id:                    Player_ID,
+	player_name:                  string,
 	coins:                        int,
 	resource_production:          [Resource]int,
 	resource_trade_price:         [Resource]int,
@@ -29,6 +30,7 @@ Move :: struct {
 	choice_state:   Choice_State,
 	acting_player:  Player_ID,
 	move_kind:      Move_Kind,
+	valid_move_id:  Maybe(int),
 	wonder_name:    Maybe(Object_Name),
 	wonder_idx:     Maybe(int),
 	card_name:      Maybe(Object_Name),
@@ -60,7 +62,7 @@ Move_Resolution_Log :: struct {
 }
 
 Game :: struct {
-	move_history:                [dynamic; 128]Move,
+	move_history:                [dynamic; 128]int,
 	boards:                      [Age]Board,
 	player_states:               #sparse[Player_ID]Player_State,
 	cards_discarded:             [dynamic; 64]Object_Name,
@@ -78,7 +80,6 @@ Game :: struct {
 	military_tokens_available:   Military_Tokens,
 	progress_tokens_available:   [dynamic; 5]Maybe(Progress_Token),
 	progress_tokens_unavailable: [dynamic; 10]Progress_Token,
-	// end_of_age_triggered:        bool,
 	completed:                   bool,
 	winner:                      Player_ID,
 	victory_type:                Victory_Type,
@@ -316,9 +317,10 @@ get_valid_moves :: proc(game: Game) -> (valid_moves: [dynamic; 64]Move) {
 		}
 	}
 
-	for &move in valid_moves {
+	for &move, i in valid_moves {
 		move.choice_state = game.choice_state
 		move.acting_player = turn_player_id
+		move.valid_move_id = i
 	}
 	return valid_moves
 }
@@ -416,9 +418,10 @@ get_victory_point_count :: proc(player_id: Player_ID, game: Game) -> (vp: int, b
 // To be used externally by programs interacting with the game
 execute_move_safe :: proc(move: Move, game: ^Game) -> (Move, bool) {
 	valid_moves := get_valid_moves(game^)
-	for &valid_move in valid_moves {
+	for &valid_move, i in valid_moves {
 		if move == valid_move {
 			execute_move_unsafe(&valid_move, game)
+			append(&game.move_history, i)
 			return valid_move, true
 		}
 	}
@@ -577,7 +580,7 @@ execute_move_unsafe :: proc(move: ^Move, game: ^Game) {
 			}
 		}
 	}
-	append(&game.move_history, move^)
+	if move.valid_move_id != nil {append(&game.move_history, move.valid_move_id.?)}
 }
 
 restart_game :: proc(game: ^Game, same_seed: bool = false) {
@@ -589,10 +592,9 @@ restart_game :: proc(game: ^Game, same_seed: bool = false) {
 undo_move :: proc(game: ^Game) {
 	move_history := game.move_history
 	restart_game(game, same_seed = true)
-	i := 0
-	for i < len(move_history) - 1 {
-		execute_move_unsafe(&move_history[i], game)
-		i += 1
+	for i in 0 ..< (len(move_history) - 1) {
+		valid_moves := get_valid_moves(game^)
+		execute_move_unsafe(&valid_moves[move_history[i]], game)
 	}
 }
 

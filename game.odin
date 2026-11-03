@@ -69,6 +69,9 @@ main :: proc() {
 	}
 
 	init_ui()
+	fmt.println(size_of(swd.Move))
+	fmt.println(size_of(swd.Move) * 128)
+	fmt.println(size_of(game))
 
 	for !rl.WindowShouldClose() {
 		handle_input(&ui_state)
