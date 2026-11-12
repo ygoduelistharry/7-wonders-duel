@@ -11,7 +11,6 @@ import rl "vendor:raylib"
 MAX_UI_ELEMENTS :: 512
 UIState :: struct {
 	game:                          ^swd.Game,
-	agents:                        #sparse[swd.Player_ID]Agent,
 	last_mouse_world_position:     [2]f32,
 	ui_element_hovered_last_frame: UIElement,
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
@@ -24,6 +23,7 @@ UIState :: struct {
 	choice_window_hidden:          bool,
 	show_discard_pile:             bool,
 	show_hitboxes:                 bool,
+	ai_thinking:                   bool,
 	input_disabled:                bool,
 	log_buffer:                    ^[dynamic]string,
 	log_expanded:                  bool,

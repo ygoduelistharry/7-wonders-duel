@@ -4,20 +4,11 @@ import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:strings"
+import "core:thread"
+import "core:time"
 import ui "my_ui"
 import swd "swd_engine"
 import rl "vendor:raylib"
-
-log_buffer: [dynamic]string
-game_logger_proc :: proc(
-	data: rawptr,
-	level: log.Level,
-	text: string,
-	options: log.Options,
-	location := #caller_location,
-) {
-	append(&log_buffer, strings.clone(text))
-}
 
 main :: proc() {
 	// set up tracking allocator
@@ -59,7 +50,7 @@ main :: proc() {
 		log.destroy_multi_logger(multi_logger)
 	}
 
-
+	// set up game engine and UI
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 	ui_state: UIState = {
 		game              = &game,
@@ -67,11 +58,30 @@ main :: proc() {
 		cost_overlay_on   = true,
 		log_buffer        = &log_buffer,
 	}
-
 	init_ui()
 
+	ai_thread: ^thread.Thread
+	random_ai_data: AI_Thread_Data = {
+		game          = &game,
+		move_selector = swd.select_random_move,
+	}
+
+	// main loop
 	for !rl.WindowShouldClose() {
 		handle_input(&ui_state)
+		if ui_state.game.turn_player == .P2 {
+			if ai_thread == nil {
+				ui_state.input_disabled = true
+				ai_thread = thread.create(ai_thread_proc)
+				ai_thread.data = &random_ai_data
+				thread.start(ai_thread)
+			} else if thread.is_done(ai_thread) {
+				ui_state.selected_move = random_ai_data.selected_move
+				thread.destroy(ai_thread)
+				ai_thread = nil
+				ui_state.input_disabled = false
+			}
+		}
 		if ui_state.selected_move.move_kind != .None {
 			if move, ok := swd.execute_move_safe(ui_state.selected_move, ui_state.game); ok {
 				swd.log_move(move)
@@ -82,13 +92,6 @@ main :: proc() {
 			ui_state.valid_moves_dirty = true
 			ui_state.selected_move = {}
 		}
-		if rl.IsWindowResized() {
-			camera.zoom = min(
-				f32(rl.GetScreenWidth()) / f32(STARTING_WINDOW_WIDTH),
-				f32(rl.GetScreenHeight()) / f32(STARTING_WINDOW_HEIGHT),
-			)
-			camera.offset = {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
-		}
 		if ui_state.valid_moves_dirty {
 			swd.log_turn_info(game)
 			for player in swd.Player_ID {
@@ -97,11 +100,44 @@ main :: proc() {
 			ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
 			ui_state.valid_moves_dirty = false
 		}
+		if rl.IsWindowResized() {
+			camera.zoom = min(
+				f32(rl.GetScreenWidth()) / f32(STARTING_WINDOW_WIDTH),
+				f32(rl.GetScreenHeight()) / f32(STARTING_WINDOW_HEIGHT),
+			)
+			camera.offset = {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2}
+		}
 
 		update_ui_element_list(&ui_state)
 		draw_frame(&ui_state)
 		free_all(context.temp_allocator)
 	}
+}
+
+
+ai_thread_proc :: proc(t: ^thread.Thread) {
+	fmt.println("AI thinking...")
+	data := (^AI_Thread_Data)(t.data)
+	time.sleep(1500 * time.Millisecond)
+	data.selected_move = data.move_selector(data.game)
+}
+
+AI_Thread_Data :: struct {
+	game:          ^swd.Game,
+	move_selector: proc(_: ^swd.Game) -> swd.Move,
+	selected_move: swd.Move,
+}
+
+
+log_buffer: [dynamic]string
+game_logger_proc :: proc(
+	data: rawptr,
+	level: log.Level,
+	text: string,
+	options: log.Options,
+	location := #caller_location,
+) {
+	append(&log_buffer, strings.clone(text))
 }
 
 camera: rl.Camera2D
