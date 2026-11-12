@@ -11,17 +11,20 @@ import rl "vendor:raylib"
 MAX_UI_ELEMENTS :: 512
 UIState :: struct {
 	game:                          ^swd.Game,
+	agents:                        #sparse[swd.Player_ID]Agent,
 	last_mouse_world_position:     [2]f32,
 	ui_element_hovered_last_frame: UIElement,
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
 	valid_moves:                   [dynamic; 64]swd.Move,
 	valid_moves_dirty:             bool,
 	last_selected_object:          Maybe(swd.Object_Name),
+	selected_move:                 swd.Move,
 	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
 	cost_overlay_on:               bool,
 	choice_window_hidden:          bool,
 	show_discard_pile:             bool,
 	show_hitboxes:                 bool,
+	input_disabled:                bool,
 	log_buffer:                    ^[dynamic]string,
 	log_expanded:                  bool,
 }

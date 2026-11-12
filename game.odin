@@ -69,12 +69,19 @@ main :: proc() {
 	}
 
 	init_ui()
-	fmt.println(size_of(swd.Move))
-	fmt.println(size_of(swd.Move) * 128)
-	fmt.println(size_of(game))
 
 	for !rl.WindowShouldClose() {
 		handle_input(&ui_state)
+		if ui_state.selected_move.move_kind != .None {
+			if move, ok := swd.execute_move_safe(ui_state.selected_move, ui_state.game); ok {
+				swd.log_move(move)
+			} else {
+				log.errorf("Something went wrong! This move should be valid always.\n%v", move)
+			}
+			ui_state.last_selected_object = nil
+			ui_state.valid_moves_dirty = true
+			ui_state.selected_move = {}
+		}
 		if rl.IsWindowResized() {
 			camera.zoom = min(
 				f32(rl.GetScreenWidth()) / f32(STARTING_WINDOW_WIDTH),
@@ -122,6 +129,9 @@ handle_input :: proc(ui_state: ^UIState) {
 			ui_state.ui_element_hovered_last_frame = {}
 		}
 	}
+	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
+
+	if ui_state.input_disabled {return}
 
 	if rl.IsKeyReleased(.FOUR) {
 		ui_state.game.age = .DraftWonders
@@ -150,13 +160,10 @@ handle_input :: proc(ui_state: ^UIState) {
 		ui_state.show_discard_pile = !ui_state.show_discard_pile
 	}
 	if rl.IsKeyReleased(.R) {
-		move := swd.execute_random_move_safe(ui_state.game)
-		swd.log_move(move)
-		ui_state.last_selected_object = nil
-		ui_state.valid_moves_dirty = true
+		ui_state.selected_move = swd.select_random_move(ui_state.game)
 	}
 	if rl.IsKeyReleased(.T) {
-		restart_game(ui_state)
+		restart_game(ui_state, same_seed = true)
 	}
 	if rl.IsKeyReleased(.E) {
 		swd.undo_move(ui_state.game)
@@ -173,8 +180,6 @@ handle_input :: proc(ui_state: ^UIState) {
 	if rl.IsMouseButtonReleased(.LEFT) {
 		handle_click(ui_state.ui_element_hovered_last_frame, ui_state)
 	}
-
-	ui_state.last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
 }
 
 handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
@@ -279,15 +284,7 @@ handle_click :: proc(ui_element_clicked: UIElement, ui_state: ^UIState) {
 			}
 		}
 	}
-	if selected_move.move_kind != .None {
-		if move, ok := swd.execute_move_safe(selected_move, ui_state.game); ok {
-			swd.log_move(move)
-		} else {
-			log.errorf("Something went wrong! This move should be valid always.\n%v", move)
-		}
-		ui_state.last_selected_object = nil
-		ui_state.valid_moves_dirty = true
-	}
+	ui_state.selected_move = selected_move
 }
 
 draw_frame :: proc(ui_state: ^UIState) {

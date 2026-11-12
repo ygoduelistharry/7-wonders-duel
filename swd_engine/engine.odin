@@ -421,7 +421,6 @@ execute_move_safe :: proc(move: Move, game: ^Game) -> (Move, bool) {
 	for &valid_move, i in valid_moves {
 		if move == valid_move {
 			execute_move_unsafe(&valid_move, game)
-			append(&game.move_history, i)
 			return valid_move, true
 		}
 	}
