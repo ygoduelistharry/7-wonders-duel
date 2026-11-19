@@ -53,32 +53,34 @@ main :: proc() {
 	// set up game engine and UI
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 	ui_state: UIState = {
-		game              = &game,
+		game = &game,
 		valid_moves_dirty = true,
-		cost_overlay_on   = true,
-		log_buffer        = &log_buffer,
+		cost_overlay_on = true,
+		log_buffer = &log_buffer,
+		ai_data = {.P1 = {}, .P2 = load_ai_thread_data(&game, .Randy_Savage)},
 	}
+
 	init_ui()
 
 	ai_thread: ^thread.Thread
-	random_ai_data: AI_Thread_Data = {
-		game          = &game,
-		move_selector = swd.select_random_move,
-	}
+	ai_data: ^AI_Thread_Data
 
 	// main loop
 	for !rl.WindowShouldClose() {
 		handle_input(&ui_state)
-		if ui_state.game.turn_player == .P2 {
+		// do ai
+		ai_data = &ui_state.ai_data[ui_state.game.turn_player]
+		if ai_data^ != {} {
 			if ai_thread == nil {
 				ui_state.input_disabled = true
 				ai_thread = thread.create(ai_thread_proc)
-				ai_thread.data = &random_ai_data
+				ai_thread.data = ai_data
 				thread.start(ai_thread)
 			} else if thread.is_done(ai_thread) {
-				ui_state.selected_move = random_ai_data.selected_move
 				thread.destroy(ai_thread)
+				ui_state.selected_move = ai_data.selected_move
 				ai_thread = nil
+				ai_data = nil
 				ui_state.input_disabled = false
 			}
 		}
@@ -116,15 +118,14 @@ main :: proc() {
 
 
 ai_thread_proc :: proc(t: ^thread.Thread) {
-	fmt.println("AI thinking...")
 	data := (^AI_Thread_Data)(t.data)
-	time.sleep(1500 * time.Millisecond)
-	data.selected_move = data.move_selector(data.game)
+	data.selected_move = data.move_selector(data.game, data.think_time_ms)
 }
 
 AI_Thread_Data :: struct {
 	game:          ^swd.Game,
-	move_selector: proc(_: ^swd.Game) -> swd.Move,
+	think_time_ms: int,
+	move_selector: proc(_: ^swd.Game, think_time_ms: int) -> swd.Move,
 	selected_move: swd.Move,
 }
 
@@ -137,6 +138,7 @@ game_logger_proc :: proc(
 	options: log.Options,
 	location := #caller_location,
 ) {
+	if level != .Info {return}
 	append(&log_buffer, strings.clone(text))
 }
 

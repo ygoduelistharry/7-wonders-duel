@@ -1,8 +1,12 @@
 package swd_engine
 
 import "core:math/rand"
+import "core:time"
 
-select_random_move :: proc(game: ^Game) -> (selected_move: Move) {
+select_random_move :: proc(game: ^Game, think_time_ms: int = 0) -> (selected_move: Move) {
+	if think_time_ms > 0 {
+		time.sleep(time.Millisecond * time.Duration(think_time_ms))
+	}
 	valid_moves := get_valid_moves(game^)
 	selected_move = rand.choice(valid_moves[:])
 	return

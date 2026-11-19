@@ -10,22 +10,24 @@ import rl "vendor:raylib"
 
 MAX_UI_ELEMENTS :: 512
 UIState :: struct {
-	game:                          ^swd.Game,
-	last_mouse_world_position:     [2]f32,
-	ui_element_hovered_last_frame: UIElement,
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
 	valid_moves:                   [dynamic; 64]swd.Move,
-	valid_moves_dirty:             bool,
-	last_selected_object:          Maybe(swd.Object_Name),
-	selected_move:                 swd.Move,
 	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
+	player_names:                  #sparse[swd.Player_ID]string,
+	ai_data:                       #sparse[swd.Player_ID]AI_Thread_Data, //no AI data = human controlled
+	selected_move:                 swd.Move,
+	last_mouse_world_position:     [2]f32,
+	last_selected_object:          Maybe(swd.Object_Name),
+	game:                          ^swd.Game,
+	log_buffer:                    ^[dynamic]string,
+	ui_element_hovered_last_frame: UIElement,
+	valid_moves_dirty:             bool,
 	cost_overlay_on:               bool,
 	choice_window_hidden:          bool,
 	show_discard_pile:             bool,
 	show_hitboxes:                 bool,
 	ai_thinking:                   bool,
 	input_disabled:                bool,
-	log_buffer:                    ^[dynamic]string,
 	log_expanded:                  bool,
 }
 
