@@ -5,7 +5,6 @@ import "core:log"
 import "core:mem"
 import "core:strings"
 import "core:thread"
-import "core:time"
 import ui "my_ui"
 import swd "swd_engine"
 import rl "vendor:raylib"
@@ -53,11 +52,11 @@ main :: proc() {
 	// set up game engine and UI
 	game := swd.create_new_game(rng_seed = 1778252334733313400)
 	ui_state: UIState = {
-		game = &game,
+		game              = &game,
 		valid_moves_dirty = true,
-		cost_overlay_on = true,
-		log_buffer = &log_buffer,
-		ai_data = {.P1 = {}, .P2 = load_ai_thread_data(&game, .Randy_Savage)},
+		cost_overlay_on   = true,
+		log_buffer        = &log_buffer,
+		// ai_data = {.P1 = {}, .P2 = load_ai_thread_data(&game, .Randy_Savage)},
 	}
 
 	init_ui()

@@ -95,18 +95,26 @@ brown_resources: Resources = {.Clay, .Stone, .Wood}
 @(rodata)
 grey_resources: Resources = {.Glass, .Papyrus}
 
-object_kind_dot_product :: proc(r1, r2: [Object_Colour]int) -> int {
-	sum: int
-	for object in Object_Colour {
-		sum += r1[object] * r2[object]
-	}
-	return sum
+object_kind_dot_product :: #force_inline proc(r1, r2: [Object_Colour]int) -> int {
+	return(
+		(r1[.Brown] * r2[.Brown]) +
+		(r1[.Grey] * r2[.Grey]) +
+		(r1[.Yellow] * r2[.Yellow]) +
+		(r1[.Green] * r2[.Green]) +
+		(r1[.Red] * r2[.Red]) +
+		(r1[.Blue] * r2[.Blue]) +
+		(r1[.Purple] * r2[.Purple]) +
+		(r1[.Wonder] * r2[.Wonder]) \
+	)
 }
-resource_dot_product :: proc(r1, r2: [Resource]int) -> (sum: int) {
-	for resource in Resource {
-		sum += r1[resource] * r2[resource]
-	}
-	return sum
+resource_dot_product :: #force_inline proc(r1, r2: [Resource]int) -> int {
+	return(
+		(r1[.Clay] * r2[.Clay]) +
+		(r1[.Stone] * r2[.Stone]) +
+		(r1[.Wood] * r2[.Wood]) +
+		(r1[.Glass] * r2[.Glass]) +
+		(r1[.Papyrus] * r2[.Papyrus]) \
+	)
 }
 dot :: proc {
 	resource_dot_product,
@@ -940,6 +948,8 @@ Board_Slot :: struct {
 	covers:           [dynamic; 4]int,
 	covered_by_count: int,
 	card_in_slot:     Maybe(Object_Name),
+	costs:            #sparse[Player_ID]Object_Real_Cost,
+	cost_updated:     #sparse[Player_ID]bool,
 }
 
 Board :: [20]Board_Slot

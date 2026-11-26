@@ -13,4 +13,6 @@ build/
 7-wonders-duel
 gimp
 debug_build
+*/odin-tracy
+*.spall
 
