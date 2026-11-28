@@ -148,7 +148,7 @@ Age :: enum u8 {
 	Age3,
 }
 
-Choice_State :: enum u16 {
+Choice_State :: enum u8 {
 	Game_Over,
 	Choose_Wonder_To_Draft,
 	Choose_Object_To_Construct_Or_Discard,
@@ -173,7 +173,7 @@ choice_state_text: [Choice_State]string = {
 	.Choose_First_Player                   = "Choose which player goes first.",
 }
 
-Move_Kind :: enum {
+Move_Kind :: enum u8 {
 	None,
 	Draft_Wonder,
 	Construct_Card,
@@ -184,7 +184,7 @@ Move_Kind :: enum {
 	Select_Player,
 }
 
-Victory_Type :: enum {
+Victory_Type :: enum u8 {
 	None,
 	Military,
 	Science,
@@ -217,7 +217,7 @@ Object :: struct {
 
 // need to include The Messe and The Statue of Liberty at some point
 // Object_Name enum is sorted by a convenient UI display order
-Object_Name :: enum {
+Object_Name :: enum u8 {
 	// brown wood
 	Lumber_Yard,
 	Logging_Camp,

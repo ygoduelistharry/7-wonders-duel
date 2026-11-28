@@ -1,8 +1,8 @@
 package swd_engine
 
 Object_Real_Cost :: struct {
-	total_coin_cost:     int,
-	traded_coin_cost:    int,
+	total_coin_cost:     u8,
+	traded_coin_cost:    u8,
 	linking_symbol_used: bool,
 }
 
@@ -26,7 +26,7 @@ calculate_object_cost :: proc(
 		return {linking_symbol_used = true}
 	}
 
-	building_coin_cost := object.cost.coins
+	building_coin_cost := u8(object.cost.coins)
 
 	// check how many of each resource we need to trade for after using up "fixed" resource production.
 	// this is effectively just brown and grey buildings
@@ -60,7 +60,7 @@ calculate_object_cost :: proc(
 
 	// if we have no varaible resource production, no need to sort.
 	if generic_brown_res_available + generic_grey_res_available + generic_res_available <= 0 {
-		traded_coin_cost := dot(player.resource_trade_price, extra_res_req)
+		traded_coin_cost := u8(dot(player.resource_trade_price, extra_res_req))
 		return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 	}
 
@@ -88,7 +88,7 @@ calculate_object_cost :: proc(
 		}
 	}
 
-	traded_coin_cost := dot(player.resource_trade_price, extra_res_req)
+	traded_coin_cost := u8(dot(player.resource_trade_price, extra_res_req))
 	return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 }
 

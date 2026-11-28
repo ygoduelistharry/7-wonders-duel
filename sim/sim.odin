@@ -33,6 +33,8 @@ when ENABLE_SPALL {
 
 main :: proc() {
 	fmt.printfln("Running random simulations!")
+	fmt.printfln("%v", size_of(swd.Move))
+	fmt.printfln("%v", size_of(bool))
 	run_count := 100_000
 	game: swd.Game
 	selected_move: swd.Move

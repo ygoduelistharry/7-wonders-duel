@@ -28,7 +28,7 @@ log_turn_info :: proc(game: Game) {
 	}
 }
 
-log_move :: proc(move: Move) {
+log_move :: proc(move: Move, resolution_log: Move_Resolution_Log) {
 	switch move.move_kind {
 	case .None:
 		{return}
@@ -41,15 +41,15 @@ log_move :: proc(move: Move) {
 			log.infof(
 				"└─ %v spent %v coins to construct %v",
 				move.acting_player,
-				move.cost.?.total_coin_cost,
+				move.cost.total_coin_cost,
 				move.wonder_name,
 			)
 			log.infof("└── (%v tucked)", move.card_name)
 
-			log_object_construction(move)
+			log_object_construction(move, resolution_log)
 
-			if move.resolution_log.go_again_triggered {
-				if move.resolution_log.theology_triggered {
+			if resolution_log.go_again_triggered {
+				if resolution_log.theology_triggered {
 					log.infof("└─ Go again triggered from Theology.")
 				} else {
 					log.infof("└─ Go again triggered.")
@@ -61,11 +61,11 @@ log_move :: proc(move: Move) {
 			log.infof(
 				"└─ %v spent %v coins to construct %v.",
 				move.acting_player,
-				move.cost.?.total_coin_cost,
+				move.cost.total_coin_cost,
 				move.card_name,
 			)
 
-			log_object_construction(move)
+			log_object_construction(move, resolution_log)
 
 		}
 	case .Discard_For_Coins:
@@ -74,17 +74,17 @@ log_move :: proc(move: Move) {
 				"└─ %v discarded %v for %v coins.",
 				move.acting_player,
 				move.card_name,
-				move.resolution_log.gained_coins,
+				resolution_log.gained_coins,
 			)
 		}
 	case .Select_Progress_Token:
 		{
 			log.infof("└─ %v gained the %v progress token.", move.acting_player, move.token)
-			if move.resolution_log.gained_coins > 0 {
+			if resolution_log.gained_coins > 0 {
 				log.infof(
 					"└─ %v gained %v coins.",
 					move.acting_player,
-					move.resolution_log.gained_coins,
+					resolution_log.gained_coins,
 				)
 			}
 		}
@@ -102,7 +102,7 @@ log_move :: proc(move: Move) {
 			case .Choose_Card_To_Revive:
 				{
 					log.infof("└─ %v revived the card %v.", move.acting_player, move.card_name)
-					log_object_construction(move)
+					log_object_construction(move, resolution_log)
 				}
 			}
 		}
@@ -121,48 +121,47 @@ log_move :: proc(move: Move) {
 	}
 }
 
-log_object_construction :: proc(move: Move) {
-	move_res := move.resolution_log
-	if move_res.economy_triggered {
+log_object_construction :: proc(move: Move, resolution_log: Move_Resolution_Log) {
+	if resolution_log.economy_triggered {
 		log.infof(
 			"└── (%v gained %v coins from Economy.)",
 			other_player_id(move.acting_player),
-			move.cost.?.traded_coin_cost,
+			move.cost.traded_coin_cost,
 		)
 	}
-	if move_res.gained_coins > 0 {
-		log.infof("└─ %v gained %v coins.", move.acting_player, move_res.gained_coins)
-		if move_res.urbanism_triggered {
+	if resolution_log.gained_coins > 0 {
+		log.infof("└─ %v gained %v coins.", move.acting_player, resolution_log.gained_coins)
+		if resolution_log.urbanism_triggered {
 			log.infof("└── (4 coins gained from Urbanism)")
 		}
 	}
-	if move_res.military_track_change != 0 {
-		absolute_track_change := move_res.military_track_change
-		if move_res.military_track_change < 0 {absolute_track_change *= -1}
+	if resolution_log.military_track_change != 0 {
+		absolute_track_change := resolution_log.military_track_change
+		if resolution_log.military_track_change < 0 {absolute_track_change *= -1}
 		log.infof(
 			"└─ Military pawn moved %v space(s) towards %v",
 			absolute_track_change,
 			other_player_id(move.acting_player),
 		)
-		if move_res.strategy_triggered {
+		if resolution_log.strategy_triggered {
 			log.infof("└── (1 shield from Strategy)")
 		}
-		if move_res.opponent_lost_coins > 0 {
+		if resolution_log.opponent_lost_coins > 0 {
 			log.infof("└─ A military token was destroyed.")
 		}
 	}
-	if move_res.opponent_lost_coins > 0 {
+	if resolution_log.opponent_lost_coins > 0 {
 		log.infof(
 			"└─ %v lost %v coins.",
 			other_player_id(move.acting_player),
-			move_res.opponent_lost_coins,
+			resolution_log.opponent_lost_coins,
 		)
 	}
-	if move_res.science_symbol_paired != nil {
+	if resolution_log.science_symbol_paired != nil {
 		log.infof(
 			"└─ %v paired the %v science symbol.",
 			move.acting_player,
-			move_res.science_symbol_paired,
+			resolution_log.science_symbol_paired,
 		)
 	}
 }

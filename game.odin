@@ -84,8 +84,8 @@ main :: proc() {
 			}
 		}
 		if ui_state.selected_move.move_kind != .None {
-			if move, ok := swd.execute_move_safe(ui_state.selected_move, ui_state.game); ok {
-				swd.log_move(move)
+			if move, res, ok := swd.execute_move_safe(ui_state.selected_move, ui_state.game); ok {
+				swd.log_move(move, res)
 			} else {
 				log.errorf("Something went wrong! This move should be valid always.\n%v", move)
 			}

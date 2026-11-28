@@ -397,7 +397,7 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			//possible states
 			card_selected := ui_state.last_selected_object != nil
 			can_afford :=
-				wonder_cost.total_coin_cost <= ui_state.game.player_states[player_id].coins
+				int(wonder_cost.total_coin_cost) <= ui_state.game.player_states[player_id].coins
 			turn_player_owns_wonder := ui_state.game.turn_player == player_id
 			wonder_built := int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0
 			seven_wonders_built := swd.get_constructed_wonders_count(ui_state.game^) >= 7
@@ -586,7 +586,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 			}
 		}
 		// build_cost = ui_state.object_costs[player][ui_state.last_selected_object.?]
-		if build_cost.total_coin_cost <= ui_state.game.player_states[player_id].coins {
+		if int(build_cost.total_coin_cost) <= ui_state.game.player_states[player_id].coins {
 			tint = rl.WHITE
 			border_width = SELECTION_BORDER_WIDTH
 			build_cost_text_colour = rl.WHITE
