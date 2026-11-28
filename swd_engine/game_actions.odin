@@ -166,6 +166,15 @@ construct_object :: proc(
 		game.choice_state = .Choose_Card_To_Revive
 	}
 
+	// check if object costs need recalculating
+	if object_affects_cost(object) {
+		for &slot in game.boards[game.age] {
+			slot.cost_updated = {}
+		}
+		game.player_states[.P1].wonder_costs_updated = {}
+		game.player_states[.P2].wonder_costs_updated = {}
+	}
+
 	return
 }
 
@@ -212,7 +221,9 @@ gain_progress_token :: proc(
 			events.gained_coins += 6
 		}
 	case .Architecture:
-		{}
+		{
+			player.wonder_costs_updated = {}
+		}
 	case .Economy:
 		{}
 	case .Law:
@@ -226,7 +237,11 @@ gain_progress_token :: proc(
 			}
 		}
 	case .Masonry:
-		{}
+		{
+			for &slot in game.boards[game.age] {
+				slot.cost_updated[player_id] = false
+			}
+		}
 	case .Mathematics:
 		{}
 	case .Philosophy:

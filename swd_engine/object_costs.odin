@@ -1,13 +1,9 @@
 package swd_engine
 
-import "core:slice"
-
-
 Object_Real_Cost :: struct {
 	total_coin_cost:     int,
 	traded_coin_cost:    int,
 	linking_symbol_used: bool,
-	can_afford:          bool,
 }
 
 Object_Base_Cost :: struct {
@@ -16,7 +12,7 @@ Object_Base_Cost :: struct {
 	free_construction_symbol: Linking_Symbol,
 }
 
-get_object_cost :: proc(
+calculate_object_cost :: proc(
 	object_name: Object_Name,
 	game: Game,
 	player_id: Maybe(Player_ID) = nil,
@@ -27,7 +23,7 @@ get_object_cost :: proc(
 
 	// check for free linking symbol
 	if object.cost.free_construction_symbol in player.linking_symbols {
-		return {linking_symbol_used = true, can_afford = true}
+		return {linking_symbol_used = true}
 	}
 
 	building_coin_cost := object.cost.coins
@@ -58,19 +54,14 @@ get_object_cost :: proc(
 	}
 	// if we can cover our production without considering trading then we are done. if not...
 	if total_extra_res_req <= 0 {
-		return {building_coin_cost, 0, false, building_coin_cost <= player.coins}
+		return {building_coin_cost, 0, false}
 	}
 
 
 	// if we have no varaible resource production, no need to sort.
 	if generic_brown_res_available + generic_grey_res_available + generic_res_available <= 0 {
 		traded_coin_cost := dot(player.resource_trade_price, extra_res_req)
-		return {
-			building_coin_cost + traded_coin_cost,
-			traded_coin_cost,
-			false,
-			building_coin_cost + traded_coin_cost <= player.coins,
-		}
+		return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 	}
 
 	// if we do, we need to know what the best way to spend "variable" resource production is:
@@ -98,12 +89,7 @@ get_object_cost :: proc(
 	}
 
 	traded_coin_cost := dot(player.resource_trade_price, extra_res_req)
-	return {
-		building_coin_cost + traded_coin_cost,
-		traded_coin_cost,
-		false,
-		building_coin_cost + traded_coin_cost <= player.coins,
-	}
+	return {building_coin_cost + traded_coin_cost, traded_coin_cost, false}
 }
 
 get_all_object_costs :: proc(
@@ -114,7 +100,7 @@ get_all_object_costs :: proc(
 ) {
 	p_id := player.? or_else game.turn_player
 	for object in Object_Name {
-		object_costs[object] = get_object_cost(object, game, p_id)
+		object_costs[object] = calculate_object_cost(object, game, p_id)
 	}
 	return
 }
@@ -148,5 +134,14 @@ get_resources_sorted_by_value_desc :: #force_inline proc(values: [Resource]int) 
 		Resource(u8(p3)),
 		Resource(u8(p4)),
 	}
+}
+
+object_affects_cost :: proc(object: Object) -> bool {
+	return(
+		object.resources_produced != {} ||
+		object.fixed_cost_resource_produced != {} ||
+		object.variable_brown_resource_produced > 0 ||
+		object.variable_grey_resource_produced > 0 \
+	)
 }
 

@@ -95,10 +95,7 @@ main :: proc() {
 		}
 		if ui_state.valid_moves_dirty {
 			swd.log_turn_info(game)
-			for player in swd.Player_ID {
-				ui_state.object_costs[player] = swd.get_all_object_costs(ui_state.game^, player)
-			}
-			ui_state.valid_moves = swd.get_valid_moves(ui_state.game^)
+			swd.set_valid_moves(ui_state.game, &ui_state.valid_moves)
 			ui_state.valid_moves_dirty = false
 		}
 		if rl.IsWindowResized() {

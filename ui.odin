@@ -12,7 +12,6 @@ MAX_UI_ELEMENTS :: 512
 UIState :: struct {
 	ui_element_list:               [dynamic; MAX_UI_ELEMENTS]UIElement,
 	valid_moves:                   [dynamic; 64]swd.Move,
-	object_costs:                  #sparse[swd.Player_ID][swd.Object_Name]swd.Object_Real_Cost,
 	player_names:                  #sparse[swd.Player_ID]string,
 	ai_data:                       #sparse[swd.Player_ID]AI_Thread_Data, //no AI data = human controlled
 	selected_move:                 swd.Move,
@@ -260,10 +259,7 @@ append_card_structure_elements :: proc(ui_state: ^UIState) {
 					&ui_state.ui_element_list,
 					UIElement {
 						ui_data = ui.create_text_ui_element(
-							text = fmt.tprintf(
-								"%d",
-								ui_state.object_costs[turn_player][card.?].total_coin_cost,
-							),
+							text = fmt.tprintf("%d", slot.cost[turn_player].total_coin_cost),
 							dest_pos = midpoint,
 							colour = rl.WHITE,
 							font = cost_info_font,
@@ -389,12 +385,19 @@ append_player_wonder_elements :: proc(ui_state: ^UIState) {
 			x := WONDER_SIZE.x / 2 + f32(col) * (WONDER_SIZE.x + gap) + 5
 			if player_id == .P2 {x += STARTING_WINDOW_WIDTH - (2 * WONDER_SIZE.x + gap) - 5}
 			y := WONDER_SIZE.y / 2 + f32(row) * (WONDER_SIZE.y + gap) + 5
-			wonder_cost := ui_state.object_costs[player_id][wonder]
+
+			wonder_cost: swd.Object_Real_Cost
+			if ui_state.game.player_states[player_id].wonder_costs_updated[i] {
+				wonder_cost = ui_state.game.player_states[player_id].wonder_costs[i]
+			} else {
+				wonder_cost = swd.calculate_object_cost(wonder, ui_state.game^, player_id)
+			}
 
 
 			//possible states
 			card_selected := ui_state.last_selected_object != nil
-			can_afford := wonder_cost.can_afford
+			can_afford :=
+				wonder_cost.total_coin_cost <= ui_state.game.player_states[player_id].coins
 			turn_player_owns_wonder := ui_state.game.turn_player == player_id
 			wonder_built := int(ui_state.game.player_states[player_id].cards_tucked[i]) != 0
 			seven_wonders_built := swd.get_constructed_wonders_count(ui_state.game^) >= 7
@@ -569,15 +572,21 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 			),
 		},
 	)
-	player := ui_state.game.turn_player
+	player_id := ui_state.game.turn_player
 	build_cost: swd.Object_Real_Cost
 	tint := rl.GRAY
 	border_width: f32 = 0.0
 	build_cost_text_colour := rl.RED
 	display_cost: bool
 	if ui_state.last_selected_object != nil {
-		build_cost = ui_state.object_costs[player][ui_state.last_selected_object.?]
-		if build_cost.can_afford {
+		for slot in ui_state.game.boards[ui_state.game.age] {
+			if slot.card_in_slot == ui_state.last_selected_object.? {
+				build_cost = slot.cost[player_id]
+				break
+			}
+		}
+		// build_cost = ui_state.object_costs[player][ui_state.last_selected_object.?]
+		if build_cost.total_coin_cost <= ui_state.game.player_states[player_id].coins {
 			tint = rl.WHITE
 			border_width = SELECTION_BORDER_WIDTH
 			build_cost_text_colour = rl.WHITE
@@ -593,7 +602,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 				size = {icon_diameter, icon_diameter},
 				tint = tint,
 				border_width = border_width,
-				border_colour = PLAYER_COLOUR[player],
+				border_colour = PLAYER_COLOUR[player_id],
 				corner_radius = f32(icon_diameter / 2),
 			),
 		},
@@ -619,7 +628,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 				dest_pos = rect_midpoint + offset,
 				size = {icon_diameter, icon_diameter},
 				border_width = border_width,
-				border_colour = PLAYER_COLOUR[player],
+				border_colour = PLAYER_COLOUR[player_id],
 				corner_radius = f32(icon_diameter / 2),
 			),
 		},
@@ -630,7 +639,7 @@ append_card_option_elements :: proc(ui_state: ^UIState, card_midpoint: [2]f32) {
 			ui_data = ui.create_text_ui_element(
 				text = fmt.tprintf(
 					"+%d",
-					ui_state.game.player_states[player].object_kind_count_owned[.Yellow] + 2,
+					ui_state.game.player_states[player_id].object_kind_count_owned[.Yellow] + 2,
 				),
 				colour = rl.GREEN,
 				font = action_confirm_font,

@@ -33,7 +33,7 @@ when ENABLE_SPALL {
 
 main :: proc() {
 	fmt.printfln("Running random simulations!")
-	run_count := 100
+	run_count := 100_000
 	game: swd.Game
 	selected_move: swd.Move
 	start_tick := time.tick_now()

@@ -948,7 +948,7 @@ Board_Slot :: struct {
 	covers:           [dynamic; 4]int,
 	covered_by_count: int,
 	card_in_slot:     Maybe(Object_Name),
-	costs:            #sparse[Player_ID]Object_Real_Cost,
+	cost:             #sparse[Player_ID]Object_Real_Cost,
 	cost_updated:     #sparse[Player_ID]bool,
 }
 
